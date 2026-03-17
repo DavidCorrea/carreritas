@@ -1,18 +1,16 @@
-# Hax Race
+# Carreritas
 
 A top-down racing game inspired by Haxball's visual style, built with Three.js.
 
-## How to Play
+## Play
 
-Serve the project directory with any local HTTP server:
+[carreritas.vercel.app](https://carreritas.vercel.app)
+
+Or serve locally:
 
 ```bash
 npx serve .
-# or
-python3 -m http.server
 ```
-
-Then open the URL shown in your terminal.
 
 ## Controls
 
