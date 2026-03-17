@@ -73,7 +73,7 @@ Bot detection (statistical flagging of inputs that are unnaturally smooth or sus
 
 ## Ghost sync and friend ghosts
 
-Ghosts are currently localStorage-only. Once accounts exist, decide: keep ghosts local-only, sync only the best ghost per track, or let users opt in to sharing. If shared, when racing a track a friend has also raced, show their ghost alongside your own best. Makes the social layer feel alive even in single-player. Syncing full ghost data (position + angle every 50ms) is a lot of data — consider only syncing for challenge tracks or capping replay length.
+Ghosts are currently localStorage-only. Each user keeps one ghost per map config (their personal best). Once accounts exist, when racing a track a friend has also raced, show their ghost alongside your own best. The server only needs to persist ghosts for competitive or social contexts — challenge tracks and shared series. Personal random-track ghosts stay in localStorage (no server cost). See "Ghost replay compression" for reducing per-replay size before syncing.
 
 **Where:** new feature (needs user accounts and backend storage)
 **Why it matters:** Racing against a friend's ghost is more motivating than racing alone. Bridges single-player and social without requiring real-time multiplayer.
@@ -105,3 +105,32 @@ Notify users when: a friend invites them to a series, a challenge they participa
 
 **Where:** new feature (needs user accounts, friend system, and backend event system)
 **Why it matters:** Without notifications, users have to manually check for updates. Notifications close the loop on every social interaction.
+
+## Data storage strategy
+
+Not all race data needs server-side persistence. Draw a clear line: the server only stores data that's competitive or social. Everything solo stays on the client.
+
+- **Challenge times and ghosts** (server): bounded at ~1 daily + 1 weekly challenge. 3,000 users × 1 best time each = one small table. Ghost replays: store only the top 3 per challenge for spectating (~225KB per challenge). User's own best ghost synced for cross-device access.
+- **Shared series results** (server): proportional to series created. Expire results after 30-90 days to prevent unbounded growth.
+- **Personal random-track bests and ghosts** (client): stay in localStorage. Unbounded track codes mean unbounded configs — the server should not try to store every random track a user ever races.
+- **Friend ghosts** (server): one replay per friend per shared track. Served on demand, not pre-synced.
+
+At 3,000 users this architecture keeps the database small (challenge times are ~1M rows/year, ghost storage is under 100MB/year for spectating replays). The unbounded personal data stays where it belongs — on the client.
+
+**Where:** architectural decision (affects backend schema and sync logic)
+**Why it matters:** Trying to store everything server-side creates an unbounded storage problem. Splitting by competitive/social vs. personal keeps costs predictable.
+
+## Ghost replay compression
+
+Current ghost format stores `{ t, x, z, a }` as JSON at 20 samples/sec. A 1-minute race is ~48KB. Several optimizations, in order of effort vs. impact:
+
+1. **Drop the timestamp** — recording is at a fixed interval (`RECORD_INTERVAL`), so time is just `frame_index × interval`. Saves 25% immediately.
+2. **Reduce sample rate** — 5 samples/sec (200ms interval) is enough for smooth interpolation. Cuts frame count by 4x.
+3. **Flat array encoding** — store as `[x0, z0, a0, x1, z1, a1, ...]` instead of objects with repeated keys. Eliminates JSON overhead.
+4. **Quantize values** — positions to 1 decimal place (0.1 unit precision), angles to 2 decimal places (0.01 radian ≈ 0.6°). Store as integers.
+5. **Delta encoding** — store first frame absolute, subsequent frames as deltas from previous. Produces smaller numbers that compress better.
+
+Combined effect for a 1-minute race: ~48KB down to under 2KB (~25x reduction). Even just steps 1-2 alone (drop timestamp + 5/sec) get to ~5KB with minimal code changes. The full pipeline is worth implementing before adding server-side ghost sync.
+
+**Where:** `game.js` recording/replay logic, and future backend ghost storage
+**Why it matters:** Directly reduces localStorage usage, network transfer for ghost sync, and server storage costs. Multiplies across every user and every ghost.
