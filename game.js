@@ -13,7 +13,7 @@
   var VIEW_SIZE = 450;
   var CAMERA_HEIGHT = 300;
   var TRACK_SAMPLES = 400;
-  var RECORD_INTERVAL = 0.05;
+  var RECORD_INTERVAL = 0.1;
   var STORAGE_PREFIX = 'haxrace_ghost_';
 
   var seriesMode = false;
@@ -87,13 +87,51 @@
     return STORAGE_PREFIX + code + '_' + totalLaps + 'L' + (reversed ? '_R' : '');
   }
 
+  function encodeReplay(frames) {
+    if (frames.length === 0) return [];
+    var packed = [];
+    var px = Math.round(frames[0].x * 10);
+    var pz = Math.round(frames[0].z * 10);
+    var pa = Math.round(frames[0].a * 100);
+    packed.push(px, pz, pa);
+    for (var i = 1; i < frames.length; i++) {
+      var cx = Math.round(frames[i].x * 10);
+      var cz = Math.round(frames[i].z * 10);
+      var ca = Math.round(frames[i].a * 100);
+      packed.push(cx - px, cz - pz, ca - pa);
+      px = cx; pz = cz; pa = ca;
+    }
+    return packed;
+  }
+
+  function decodeReplay(packed) {
+    var frames = [];
+    if (packed.length < 3) return frames;
+    var px = packed[0], pz = packed[1], pa = packed[2];
+    frames.push({ x: px / 10, z: pz / 10, a: pa / 100 });
+    for (var i = 3; i < packed.length; i += 3) {
+      px += packed[i];
+      pz += packed[i + 1];
+      pa += packed[i + 2];
+      frames.push({ x: px / 10, z: pz / 10, a: pa / 100 });
+    }
+    return frames;
+  }
+
   function loadBest(code) {
     bestReplay = null;
     bestTime = null;
     try {
       var data = JSON.parse(localStorage.getItem(storageKey(code)));
-      if (data && data.time && data.frames && data.frames.length > 0) {
-        bestReplay = data.frames;
+      if (!data || !data.time) return;
+      if (data.v === 2 && data.packed && data.packed.length >= 3) {
+        bestReplay = decodeReplay(data.packed);
+        bestTime = data.time;
+      } else if (data.frames && data.frames.length > 0) {
+        bestReplay = [];
+        for (var i = 0; i < data.frames.length; i++) {
+          bestReplay.push({ x: data.frames[i].x, z: data.frames[i].z, a: data.frames[i].a });
+        }
         bestTime = data.time;
       }
     } catch (_) {}
@@ -102,7 +140,7 @@
   function saveBest(code, time, frames) {
     bestReplay = frames;
     bestTime = time;
-    localStorage.setItem(storageKey(code), JSON.stringify({ time: time, frames: frames }));
+    localStorage.setItem(storageKey(code), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames) }));
   }
 
   // ── String → track points (polar) ────────────────────────────────
@@ -344,27 +382,26 @@
   function updateGhost() {
     if (!ghostMesh || !bestReplay) return;
 
-    var i = 0;
-    while (i < bestReplay.length - 1 && bestReplay[i + 1].t <= raceTimer) i++;
+    var frameTime = raceTimer / RECORD_INTERVAL;
+    var i = Math.floor(frameTime);
 
     if (i >= bestReplay.length - 1) {
       ghostMesh.visible = false;
       return;
     }
 
-    var a = bestReplay[i], b = bestReplay[i + 1];
-    var span = b.t - a.t;
-    var frac = span > 0 ? (raceTimer - a.t) / span : 0;
+    var frac = frameTime - i;
+    var fa = bestReplay[i], fb = bestReplay[i + 1];
 
-    var x = a.x + (b.x - a.x) * frac;
-    var z = a.z + (b.z - a.z) * frac;
+    var x = fa.x + (fb.x - fa.x) * frac;
+    var z = fa.z + (fb.z - fa.z) * frac;
 
-    var angleDiff = b.a - a.a;
+    var angleDiff = fb.a - fa.a;
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
     ghostMesh.position.set(x, 0, z);
-    ghostMesh.rotation.y = a.a + angleDiff * frac;
+    ghostMesh.rotation.y = fa.a + angleDiff * frac;
     ghostMesh.visible = true;
   }
 
@@ -372,8 +409,8 @@
   function recordFrame(dt) {
     recordAccum += dt;
     if (recordAccum >= RECORD_INTERVAL) {
-      recordAccum = 0;
-      recording.push({ t: raceTimer, x: player.x, z: player.z, a: player.angle });
+      recordAccum -= RECORD_INTERVAL;
+      recording.push({ x: player.x, z: player.z, a: player.angle });
     }
   }
 
@@ -582,6 +619,8 @@
         e.preventDefault();
         if (gameState === 'menu') {
           startCountdown();
+        } else if (gameState === 'racing' || gameState === 'countdown') {
+          restartCurrentMap();
         } else if (gameState === 'finished') {
           if (seriesMode && currentStageIndex < stageCount - 1) {
             advanceToNextStage();
@@ -738,7 +777,7 @@
       countdownEl.style.display = 'none';
       countdownEl.style.color = '#fff';
       raceTimer = 0;
-      recording = [];
+      recording = [{ x: player.x, z: player.z, a: player.angle }];
       recordAccum = 0;
       lapTimesList.innerHTML = '';
     }
@@ -750,7 +789,7 @@
     resultsEl.style.display = 'flex';
     resultsList.innerHTML = '';
 
-    recording.push({ t: raceTimer, x: player.x, z: player.z, a: player.angle });
+    recording.push({ x: player.x, z: player.z, a: player.angle });
     var isNewBest = !bestTime || player.finishTime < bestTime;
     if (isNewBest) saveBest(currentTrackCode, player.finishTime, recording);
 
@@ -862,6 +901,25 @@
     var sec = (s % 60).toFixed(2);
     if (sec < 10) sec = '0' + sec;
     return m + ':' + sec;
+  }
+
+  function restartCurrentMap() {
+    resultsEl.style.display = 'none';
+    if (player) { scene.remove(player.mesh); player = null; }
+    createPlayer();
+    createGhost();
+    gameState = 'countdown';
+    overlay.classList.add('hidden');
+    hud.style.display = 'block';
+    countdownEl.style.display = 'flex';
+    countdownEl.style.color = '#fff';
+    countdownTimer = 0;
+    countdownValue = 3;
+    countdownEl.textContent = '3';
+    raceTimer = 0;
+    recording = [];
+    recordAccum = 0;
+    lapTimesList.innerHTML = '';
   }
 
   function restartRace() {
