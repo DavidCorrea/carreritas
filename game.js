@@ -94,7 +94,7 @@
 
   // ── Persistence (per track code) ──────────────────────────────────
   function storageKey(code) {
-    return STORAGE_PREFIX + code + '_' + totalLaps + 'L' + (reversed ? '_R' : '');
+    return STORAGE_PREFIX + code + '_' + totalLaps + 'L' + (reversed ? '_R' : '') + (nightMode ? '_N' : '');
   }
 
   function encodeReplay(frames) {
@@ -1182,12 +1182,12 @@
     ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     scene.add(ambientLight);
 
-    carPointLight = new THREE.PointLight(0xffe0a0, 0, 60, 2);
+    carPointLight = new THREE.PointLight(0xffe0a0, 0, 90, 2);
     scene.add(carPointLight);
 
-    beamMeshL = createBeamMesh(90, 0.45);
-    beamMeshR = createBeamMesh(90, 0.45);
-    glowMesh = createGlowMesh(25, 0.35, 0.28, 0.1);
+    beamMeshL = createBeamMesh(130, 0.45);
+    beamMeshR = createBeamMesh(130, 0.45);
+    glowMesh = createGlowMesh(35, 0.35, 0.28, 0.1);
     tailMesh = createGlowMesh(15, 0.15, 0.02, 0);
 
     scene.add(beamMeshL, beamMeshR, glowMesh, tailMesh);
@@ -1199,8 +1199,8 @@
 
   function updateNightMode() {
     var isNight = nightMode;
-    ambientLight.intensity = isNight ? 0.03 : 1.0;
-    scene.background.set(isNight ? 0x020502 : 0x5d8a4a);
+    ambientLight.intensity = isNight ? 0 : 1.0;
+    scene.background.set(isNight ? 0x000000 : 0x5d8a4a);
     if (centerLineMat) centerLineMat.color.set(isNight ? 0x111111 : 0x666666);
 
     carPointLight.intensity = isNight ? 0.8 : 0;

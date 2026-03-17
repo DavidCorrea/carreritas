@@ -14,15 +14,15 @@ Which way the track is driven. FWD runs sectors 0→1→2→3→0; REV runs 0→
 
 ## Mode (DAY / NIGHT)
 
-Visual mode. Night mode renders a dark overlay with headlight beams that follow the car's facing angle. Does not affect physics or ghost records.
+Visual mode that affects difficulty. Night mode sets ambient light to zero and adds distance fog — the track is invisible except where the car's headlight beams reach. Mode is part of the best-time storage key — DAY and NIGHT times are tracked separately.
 
 ## Ghost
 
-A replay of the best recorded run on a given track, shown as a semi-transparent blue car. Ghost data (position + angle sampled at fixed intervals) is stored in localStorage. The storage key includes track code, lap count, and direction — so each combination has its own ghost.
+A replay of the best recorded run on a given track, shown as a semi-transparent blue car. Ghost data (position + angle sampled at fixed intervals) is stored in localStorage. The storage key includes track code, lap count, direction, and mode — so each combination has its own ghost.
 
 ## Best Time
 
-The fastest total race time for a specific track code + lap count + direction combination. Stored alongside the ghost replay in localStorage.
+The fastest total race time for a specific track code + lap count + direction + mode combination. Stored alongside the ghost replay in localStorage.
 
 ## Series
 

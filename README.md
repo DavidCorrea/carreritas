@@ -30,7 +30,7 @@ npx serve .
 - **Track codes** — 18-character strings that deterministically generate a closed track shape. Random or hand-crafted.
 - **Ghost replay** — your best run is saved per track and shown as a translucent blue car on the next attempt.
 - **Direction** — race each track forward (FWD) or reversed (REV). Best times are tracked separately.
-- **Night mode** — dark track with 3D headlight beams that follow the car.
+- **Night mode** — the track is invisible except where your headlights reach. Fog hides everything beyond range. Best times are tracked separately from day.
 - **Series mode** — chain 2–5 stages with independent track codes, directions, and modes.
 - **Camera modes** — top-down, rotated, chase, and isometric views.
 - **Configurable laps** — 1 to 20 laps per race.
