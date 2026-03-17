@@ -12,6 +12,8 @@
   var nightMode = false;
   var VIEW_SIZE = 450;
   var CAMERA_HEIGHT = 300;
+  var CAMERA_MODES = ['TOP-DOWN', 'ROTATED', 'CHASE', 'ISOMETRIC'];
+  var cameraModeIndex = 0;
   var TRACK_SAMPLES = 400;
   var RECORD_INTERVAL = 0.1;
   var STORAGE_PREFIX = 'haxrace_ghost_';
@@ -32,12 +34,15 @@
   var GHOST_COLOR = 0x4da6e8;
 
   var scene, camera, renderer;
+  var orthoCamera, perspCamera;
   var trackGroup;
   var track;
   var player;
   var ghostMesh;
   var keys = {};
-  var nightCanvas, nightCtx;
+  var ambientLight, carPointLight;
+  var beamMeshL, beamMeshR, glowMesh, tailMesh;
+  var centerLineMat;
   var gameState = 'menu';
   var raceTimer = 0;
   var countdownTimer = 0;
@@ -81,6 +86,7 @@
   var rngAllBtn = document.getElementById('rng-all-btn');
   var stageListEl = document.getElementById('stage-list');
   var stageDisplayEl = document.getElementById('stage-display');
+  var cameraDisplayEl = document.getElementById('camera-display');
 
   // ── Persistence (per track code) ──────────────────────────────────
   function storageKey(code) {
@@ -223,14 +229,14 @@
     var geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
     geom.setIndex(idx);
-    trackGroup.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: 0x444444 })));
+    trackGroup.add(new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ color: 0x444444 })));
   }
 
   function buildWalls(inner, outer) {
     var step = 2;
     var count = Math.ceil(inner.length / step) + Math.ceil(outer.length / step);
     var geom = new THREE.SphereGeometry(1.8, 8, 6);
-    var mesh = new THREE.InstancedMesh(geom, new THREE.MeshBasicMaterial({ color: 0xcccccc }), count);
+    var mesh = new THREE.InstancedMesh(geom, new THREE.MeshLambertMaterial({ color: 0xcccccc }), count);
     var dummy = new THREE.Object3D();
     var n = 0;
     for (var i = 0; i < inner.length; i += step) {
@@ -259,7 +265,7 @@
       var color = i % 2 === 0 ? 0xffffff : 0x222222;
       var box = new THREE.Mesh(
         new THREE.BoxGeometry(size, 0.1, 3),
-        new THREE.MeshBasicMaterial({ color: color })
+        new THREE.MeshLambertMaterial({ color: color })
       );
       var offset = (i - squares / 2 + 0.5) * size;
       box.position.set(p.x + nx * offset, 0.05, p.z + nz * offset);
@@ -277,7 +283,8 @@
       verts.push(sampled[j].x, 0.03, sampled[j].z);
     }
     geom.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    trackGroup.add(new THREE.LineSegments(geom, new THREE.LineBasicMaterial({ color: 0x666666 })));
+    centerLineMat = new THREE.LineBasicMaterial({ color: 0x666666 });
+    trackGroup.add(new THREE.LineSegments(geom, centerLineMat));
   }
 
   // ── Car mesh creation ─────────────────────────────────────────────
@@ -287,7 +294,7 @@
 
     var disc = new THREE.Mesh(
       new THREE.CircleGeometry(CAR_RADIUS, 20),
-      new THREE.MeshBasicMaterial({ color: color, transparent: transparent, opacity: opacity })
+      new THREE.MeshLambertMaterial({ color: color, transparent: transparent, opacity: opacity })
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = 2;
@@ -295,7 +302,7 @@
 
     var ring = new THREE.Mesh(
       new THREE.RingGeometry(CAR_RADIUS * 0.82, CAR_RADIUS, 20),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 * opacity })
+      new THREE.MeshLambertMaterial({ color: 0x000000, transparent: true, opacity: 0.3 * opacity })
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 2.1;
@@ -303,7 +310,7 @@
 
     var dot = new THREE.Mesh(
       new THREE.CircleGeometry(CAR_RADIUS * 0.22, 12),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: transparent, opacity: opacity })
+      new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: transparent, opacity: opacity })
     );
     dot.rotation.x = -Math.PI / 2;
     dot.position.set(0, 2.5, CAR_RADIUS * 0.55);
@@ -629,6 +636,11 @@
           }
         }
       }
+
+      if (e.code === 'KeyC' && document.activeElement.tagName !== 'INPUT') {
+        cameraModeIndex = (cameraModeIndex + 1) % CAMERA_MODES.length;
+        applyCameraMode();
+      }
     });
 
     window.addEventListener('keyup', function (e) { keys[e.code] = false; });
@@ -937,97 +949,183 @@
 
   // ── Camera ────────────────────────────────────────────────────────
   function updateCamera() {
-    camera.position.x += (player.x - camera.position.x) * 0.08;
-    camera.position.z += (player.z - camera.position.z) * 0.08;
-    camera.lookAt(camera.position.x, 0, camera.position.z);
-  }
-
-  // ── Night mode ────────────────────────────────────────────────────
-  function createNightOverlay() {
-    nightCanvas = document.createElement('canvas');
-    nightCanvas.width = window.innerWidth;
-    nightCanvas.height = window.innerHeight;
-    var s = nightCanvas.style;
-    s.position = 'absolute';
-    s.top = '0';
-    s.left = '0';
-    s.pointerEvents = 'none';
-    s.zIndex = '10';
-    s.display = 'none';
-    document.body.appendChild(nightCanvas);
-    nightCtx = nightCanvas.getContext('2d');
-  }
-
-  function renderNightOverlay() {
-    if (!nightMode || !player) {
-      nightCanvas.style.display = 'none';
-      return;
+    var mode = CAMERA_MODES[cameraModeIndex];
+    if (mode === 'TOP-DOWN') {
+      camera.position.x += (player.x - camera.position.x) * 0.08;
+      camera.position.z += (player.z - camera.position.z) * 0.08;
+      camera.position.y = CAMERA_HEIGHT;
+      camera.up.set(0, 0, -1);
+      camera.lookAt(camera.position.x, 0, camera.position.z);
+    } else if (mode === 'ROTATED') {
+      camera.position.x += (player.x - camera.position.x) * 0.08;
+      camera.position.z += (player.z - camera.position.z) * 0.08;
+      camera.position.y = CAMERA_HEIGHT;
+      camera.up.set(-Math.sin(player.angle), 0, -Math.cos(player.angle));
+      camera.lookAt(camera.position.x, 0, camera.position.z);
+    } else if (mode === 'CHASE') {
+      var chaseDist = 60;
+      var chaseHeight = 35;
+      var lookAhead = 20;
+      var behindX = player.x - Math.sin(player.angle) * chaseDist;
+      var behindZ = player.z - Math.cos(player.angle) * chaseDist;
+      camera.position.x += (behindX - camera.position.x) * 0.05;
+      camera.position.z += (behindZ - camera.position.z) * 0.05;
+      camera.position.y += (chaseHeight - camera.position.y) * 0.05;
+      camera.lookAt(
+        player.x + Math.sin(player.angle) * lookAhead,
+        0,
+        player.z + Math.cos(player.angle) * lookAhead
+      );
+    } else if (mode === 'ISOMETRIC') {
+      var isoOff = 180;
+      camera.position.x += (player.x + isoOff - camera.position.x) * 0.08;
+      camera.position.z += (player.z + isoOff - camera.position.z) * 0.08;
+      camera.position.y = 200;
+      camera.up.set(0, 1, 0);
+      camera.lookAt(camera.position.x - isoOff, 0, camera.position.z - isoOff);
     }
-    nightCanvas.style.display = 'block';
-
-    var w = nightCanvas.width;
-    var h = nightCanvas.height;
-    var ctx = nightCtx;
-
-    ctx.clearRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(0, 2, 8, 0.93)';
-    ctx.fillRect(0, 0, w, h);
-
-    var scale = w / VIEW_SIZE;
-    var sx = (player.x - camera.position.x) * scale + w / 2;
-    var sy = (player.z - camera.position.z) * scale + h / 2;
-    var screenAngle = Math.atan2(Math.cos(player.angle), Math.sin(player.angle));
-
-    ctx.globalCompositeOperation = 'destination-out';
-
-    var ambR = 28 * scale;
-    var ambGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, ambR);
-    ambGrad.addColorStop(0, 'rgba(255,255,255,0.5)');
-    ambGrad.addColorStop(0.5, 'rgba(255,255,255,0.12)');
-    ambGrad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = ambGrad;
-    ctx.beginPath();
-    ctx.arc(sx, sy, ambR, 0, Math.PI * 2);
-    ctx.fill();
-
-    var beamLen = 150 * scale;
-    drawHeadlightBeam(ctx, sx, sy, screenAngle - 0.06, beamLen, 0.35, scale);
-    drawHeadlightBeam(ctx, sx, sy, screenAngle + 0.06, beamLen, 0.35, scale);
-
-    ctx.globalCompositeOperation = 'source-over';
-
-    var tailAngle = screenAngle + Math.PI;
-    var tailOff = CAR_RADIUS * scale * 0.5;
-    var tailX = sx + Math.cos(tailAngle) * tailOff;
-    var tailY = sy + Math.sin(tailAngle) * tailOff;
-    var tailR = 12 * scale;
-    var tailGrad = ctx.createRadialGradient(tailX, tailY, 0, tailX, tailY, tailR);
-    tailGrad.addColorStop(0, 'rgba(255, 20, 0, 0.15)');
-    tailGrad.addColorStop(1, 'rgba(255, 20, 0, 0)');
-    ctx.fillStyle = tailGrad;
-    ctx.beginPath();
-    ctx.arc(tailX, tailY, tailR, 0, Math.PI * 2);
-    ctx.fill();
   }
 
-  function drawHeadlightBeam(ctx, sx, sy, angle, length, spread, scale) {
-    var offset = CAR_RADIUS * scale * 0.6;
-    var ox = sx + Math.cos(angle) * offset;
-    var oy = sy + Math.sin(angle) * offset;
+  function applyCameraMode() {
+    var mode = CAMERA_MODES[cameraModeIndex];
+    if (mode === 'CHASE') {
+      camera = perspCamera;
+    } else {
+      camera = orthoCamera;
+      var aspect = window.innerWidth / window.innerHeight;
+      var vs = (mode === 'ISOMETRIC') ? VIEW_SIZE * 1.4 : VIEW_SIZE;
+      var hw = vs / 2, hh = hw / aspect;
+      orthoCamera.left = -hw;
+      orthoCamera.right = hw;
+      orthoCamera.top = hh;
+      orthoCamera.bottom = -hh;
+      orthoCamera.updateProjectionMatrix();
+    }
+    if (player) {
+      if (mode === 'TOP-DOWN' || mode === 'ROTATED') {
+        camera.position.set(player.x, CAMERA_HEIGHT, player.z);
+      } else if (mode === 'CHASE') {
+        camera.position.set(
+          player.x - Math.sin(player.angle) * 60, 35,
+          player.z - Math.cos(player.angle) * 60
+        );
+        camera.lookAt(player.x, 0, player.z);
+      } else if (mode === 'ISOMETRIC') {
+        camera.position.set(player.x + 180, 200, player.z + 180);
+        camera.lookAt(player.x, 0, player.z);
+      }
+    }
+    cameraDisplayEl.textContent = mode;
+  }
 
-    var grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, length);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.3, 'rgba(255,255,255,0.85)');
-    grad.addColorStop(0.65, 'rgba(255,255,255,0.3)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
+  // ── Night mode (3D) ──────────────────────────────────────────────
+  function createBeamMesh(length, halfAngle) {
+    var segments = 16;
+    var positions = [0, 0.02, 0];
+    var colors = [0.9, 0.85, 0.5];
+    var indices = [];
 
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(ox, oy);
-    ctx.arc(ox, oy, length, angle - spread, angle + spread);
-    ctx.closePath();
-    ctx.fill();
+    for (var i = 0; i <= segments; i++) {
+      var t = i / segments;
+      var a = -halfAngle + 2 * halfAngle * t;
+      positions.push(Math.sin(a) * length, 0.02, Math.cos(a) * length);
+      colors.push(0, 0, 0);
+    }
+
+    for (var i = 0; i < segments; i++) {
+      indices.push(0, i + 1, i + 2);
+    }
+
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geom.setIndex(indices);
+
+    return new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    }));
+  }
+
+  function createGlowMesh(radius, r, g, b) {
+    var segments = 24;
+    var positions = [0, 0.02, 0];
+    var colors = [r, g, b];
+    var indices = [];
+
+    for (var i = 0; i <= segments; i++) {
+      var a = (i / segments) * Math.PI * 2;
+      positions.push(Math.cos(a) * radius, 0.02, Math.sin(a) * radius);
+      colors.push(0, 0, 0);
+    }
+
+    for (var i = 0; i < segments; i++) {
+      indices.push(0, i + 1, i + 2);
+    }
+
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geom.setIndex(indices);
+
+    return new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    }));
+  }
+
+  function setupLights() {
+    ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+    scene.add(ambientLight);
+
+    carPointLight = new THREE.PointLight(0xffe0a0, 0, 60, 2);
+    scene.add(carPointLight);
+
+    beamMeshL = createBeamMesh(90, 0.45);
+    beamMeshR = createBeamMesh(90, 0.45);
+    glowMesh = createGlowMesh(25, 0.35, 0.28, 0.1);
+    tailMesh = createGlowMesh(15, 0.15, 0.02, 0);
+
+    scene.add(beamMeshL, beamMeshR, glowMesh, tailMesh);
+    beamMeshL.visible = false;
+    beamMeshR.visible = false;
+    glowMesh.visible = false;
+    tailMesh.visible = false;
+  }
+
+  function updateNightMode() {
+    var isNight = nightMode;
+    ambientLight.intensity = isNight ? 0.03 : 1.0;
+    scene.background.set(isNight ? 0x020502 : 0x5d8a4a);
+    if (centerLineMat) centerLineMat.color.set(isNight ? 0x111111 : 0x666666);
+
+    carPointLight.intensity = isNight ? 0.8 : 0;
+
+    var showBeams = isNight && !!player;
+    beamMeshL.visible = showBeams;
+    beamMeshR.visible = showBeams;
+    glowMesh.visible = showBeams;
+    tailMesh.visible = showBeams;
+
+    if (!showBeams) return;
+
+    var fx = Math.sin(player.angle);
+    var fz = Math.cos(player.angle);
+    var headlightFwd = CAR_RADIUS * 0.6;
+
+    beamMeshL.position.set(player.x + fx * headlightFwd, 0, player.z + fz * headlightFwd);
+    beamMeshL.rotation.y = player.angle - 0.06;
+    beamMeshR.position.set(player.x + fx * headlightFwd, 0, player.z + fz * headlightFwd);
+    beamMeshR.rotation.y = player.angle + 0.06;
+
+    glowMesh.position.set(player.x, 0, player.z);
+    tailMesh.position.set(player.x - fx * CAR_RADIUS, 0, player.z - fz * CAR_RADIUS);
+
+    carPointLight.position.set(player.x, 8, player.z);
   }
 
   // ── Main loop ─────────────────────────────────────────────────────
@@ -1039,7 +1137,6 @@
 
     if (gameState === 'countdown') {
       updateCountdown(dt);
-      updateCamera();
     }
 
     if (gameState === 'racing') {
@@ -1061,11 +1158,11 @@
       }
 
       updateHUD();
-      updateCamera();
     }
 
+    if (player) updateCamera();
+    updateNightMode();
     renderer.render(scene, camera);
-    renderNightOverlay();
   }
 
   // ── Init ──────────────────────────────────────────────────────────
@@ -1076,20 +1173,23 @@
     var aspect = window.innerWidth / window.innerHeight;
     var halfW = VIEW_SIZE / 2;
     var halfH = halfW / aspect;
-    camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 1000);
-    camera.position.set(0, CAMERA_HEIGHT, 0);
-    camera.up.set(0, 0, -1);
-    camera.lookAt(0, 0, 0);
+    orthoCamera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 1000);
+    orthoCamera.position.set(0, CAMERA_HEIGHT, 0);
+    orthoCamera.up.set(0, 0, -1);
+    orthoCamera.lookAt(0, 0, 0);
+    perspCamera = new THREE.PerspectiveCamera(70, aspect, 1, 2000);
+    camera = orthoCamera;
+    cameraDisplayEl.textContent = CAMERA_MODES[cameraModeIndex];
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.prepend(renderer.domElement);
-    createNightOverlay();
+    setupLights();
 
     var ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000, 2000),
-      new THREE.MeshBasicMaterial({ color: 0x5d8a4a })
+      new THREE.PlaneGeometry(2000, 2000, 40, 40),
+      new THREE.MeshLambertMaterial({ color: 0x5d8a4a })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
@@ -1102,13 +1202,14 @@
 
     window.addEventListener('resize', function () {
       var a = window.innerWidth / window.innerHeight;
-      var hw = VIEW_SIZE / 2, hh = hw / a;
-      camera.left = -hw; camera.right = hw;
-      camera.top = hh; camera.bottom = -hh;
-      camera.updateProjectionMatrix();
+      var vs = (CAMERA_MODES[cameraModeIndex] === 'ISOMETRIC') ? VIEW_SIZE * 1.4 : VIEW_SIZE;
+      var hw = vs / 2, hh = hw / a;
+      orthoCamera.left = -hw; orthoCamera.right = hw;
+      orthoCamera.top = hh; orthoCamera.bottom = -hh;
+      orthoCamera.updateProjectionMatrix();
+      perspCamera.aspect = a;
+      perspCamera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      nightCanvas.width = window.innerWidth;
-      nightCanvas.height = window.innerHeight;
     });
 
     requestAnimationFrame(gameLoop);

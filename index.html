@@ -149,6 +149,15 @@
     #stage-display {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
     }
+    #camera-display { position: absolute; bottom: 30px; right: 20px; font-size: 13px; }
+
+    .github-link {
+      color: #555; font-size: 12px; margin-top: 28px;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      letter-spacing: 2px; text-decoration: none;
+      pointer-events: auto;
+    }
+    .github-link:hover { color: #4ecdc4; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -197,13 +206,14 @@
     <div id="time-display" class="hud-box">0:00.00</div>
     <div id="speed-display" class="hud-box">0 km/h</div>
     <div id="stage-display" class="hud-box"></div>
+    <div id="camera-display" class="hud-box"></div>
   </div>
 
   <div id="overlay">
     <h1>CARRERITAS</h1>
     <p class="subtitle">W / &#8593; Accelerate &nbsp;&nbsp; S / &#8595; Brake</p>
     <p class="subtitle">A / &#8592; Steer Left &nbsp;&nbsp; D / &#8594; Steer Right</p>
-    <p class="subtitle">SPACE Restart</p>
+    <p class="subtitle">SPACE Restart &nbsp;&nbsp; C Camera</p>
     <p class="track-label">RACE</p>
     <div class="laps-row">
       <button id="race-type-toggle" type="button">&#9654;</button>
@@ -243,6 +253,7 @@
       <button id="laps-plus" type="button">+</button>
     </div>
     <p class="start-prompt">Press ENTER to start</p>
+    <a href="https://github.com/DavidCorrea/carreritas" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
 
   <div id="countdown"></div>
