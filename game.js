@@ -44,6 +44,7 @@
   var beamMeshL, beamMeshR, glowMesh, tailMesh;
   var centerLineMat;
   var gameState = 'menu';
+  var recordsVisible = false;
   var raceTimer = 0;
   var countdownTimer = 0;
   var countdownValue = 0;
@@ -91,6 +92,10 @@
   var stageListEl = document.getElementById('stage-list');
   var stageDisplayEl = document.getElementById('stage-display');
   var cameraDisplayEl = document.getElementById('camera-display');
+  var recordsEl = document.getElementById('records');
+  var recordsListEl = document.getElementById('records-list');
+  var recordsBtn = document.getElementById('records-btn');
+  var recordsBackEl = document.getElementById('records-back');
 
   // ── Persistence (per track code) ──────────────────────────────────
   function storageKey(code) {
@@ -150,7 +155,31 @@
   function saveBest(code, time, frames) {
     bestReplay = frames;
     bestTime = time;
-    localStorage.setItem(storageKey(code), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames) }));
+    localStorage.setItem(storageKey(code), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames), date: Date.now() }));
+  }
+
+  function getAllBestTimes() {
+    var results = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      var match = key.match(/^haxrace_ghost_(.+)_(\d+)L(_R)?(_N)?$/);
+      if (!match) continue;
+      try {
+        var data = JSON.parse(localStorage.getItem(key));
+        if (data && data.time) {
+          results.push({
+            code: match[1],
+            laps: parseInt(match[2]),
+            reversed: !!match[3],
+            nightMode: !!match[4],
+            time: data.time,
+            date: data.date || null
+          });
+        }
+      } catch (_) {}
+    }
+    results.sort(function (a, b) { return a.time - b.time; });
+    return results;
   }
 
   // ── String → track points (polar) ────────────────────────────────
@@ -173,16 +202,119 @@
       smoothed.push(prev * 0.25 + curr * 0.5 + next * 0.25);
     }
 
+    var shift = 0;
+    for (var i = 0; i < str.length; i++) shift += str.charCodeAt(i);
+    shift = shift % 18;
+
     var points = [];
     for (var i = 0; i < 18; i++) {
-      var angle = (i / 18) * Math.PI * 2;
+      var idx = (i + shift) % 18;
+      var angle = (idx / 18) * Math.PI * 2;
       points.push(new THREE.Vector3(
-        Math.cos(angle) * smoothed[i],
+        Math.cos(angle) * smoothed[idx],
         0,
-        Math.sin(angle) * smoothed[i]
+        Math.sin(angle) * smoothed[idx]
       ));
     }
     return points;
+  }
+
+  // ── Track SVG generation ────────────────────────────────────────
+  function catmullRomPoint2D(p0, p1, p2, p3, t) {
+    var dx, dy;
+    dx = p1.x - p0.x; dy = p1.y - p0.y;
+    var d01 = Math.pow(dx * dx + dy * dy, 0.25);
+    dx = p2.x - p1.x; dy = p2.y - p1.y;
+    var d12 = Math.pow(dx * dx + dy * dy, 0.25);
+    dx = p3.x - p2.x; dy = p3.y - p2.y;
+    var d23 = Math.pow(dx * dx + dy * dy, 0.25);
+    if (d01 < 1e-4) d01 = 1;
+    if (d12 < 1e-4) d12 = 1;
+    if (d23 < 1e-4) d23 = 1;
+    var t1 = d01, t2 = t1 + d12, t3 = t2 + d23;
+    var tt = t1 + t * (t2 - t1);
+    var a1x = (t1 - tt) / t1 * p0.x + tt / t1 * p1.x;
+    var a1y = (t1 - tt) / t1 * p0.y + tt / t1 * p1.y;
+    var a2x = (t2 - tt) / (t2 - t1) * p1.x + (tt - t1) / (t2 - t1) * p2.x;
+    var a2y = (t2 - tt) / (t2 - t1) * p1.y + (tt - t1) / (t2 - t1) * p2.y;
+    var a3x = (t3 - tt) / (t3 - t2) * p2.x + (tt - t2) / (t3 - t2) * p3.x;
+    var a3y = (t3 - tt) / (t3 - t2) * p2.y + (tt - t2) / (t3 - t2) * p3.y;
+    var b1x = (t2 - tt) / t2 * a1x + tt / t2 * a2x;
+    var b1y = (t2 - tt) / t2 * a1y + tt / t2 * a2y;
+    var b2x = (t3 - tt) / (t3 - t1) * a2x + (tt - t1) / (t3 - t1) * a3x;
+    var b2y = (t3 - tt) / (t3 - t1) * a2y + (tt - t1) / (t3 - t1) * a3y;
+    return {
+      x: (t2 - tt) / (t2 - t1) * b1x + (tt - t1) / (t2 - t1) * b2x,
+      y: (t2 - tt) / (t2 - t1) * b1y + (tt - t1) / (t2 - t1) * b2y
+    };
+  }
+
+  function generateTrackSVG(code) {
+    var str = code;
+    while (str.length < 18) str += ' ';
+    str = str.substring(0, 18);
+    var radii = [];
+    for (var i = 0; i < 18; i++) {
+      var c = str.charCodeAt(i);
+      var norm = (Math.min(Math.max(c, 32), 126) - 32) / 94;
+      radii.push(140 + norm * 240);
+    }
+    var smoothed = [];
+    for (var i = 0; i < 18; i++) {
+      var prev = radii[(i + 17) % 18];
+      var curr = radii[i];
+      var next = radii[(i + 1) % 18];
+      smoothed.push(prev * 0.25 + curr * 0.5 + next * 0.25);
+    }
+    var shift = 0;
+    for (var i = 0; i < str.length; i++) shift += str.charCodeAt(i);
+    shift = shift % 18;
+
+    var pts = [];
+    for (var i = 0; i < 18; i++) {
+      var idx = (i + shift) % 18;
+      var angle = (idx / 18) * Math.PI * 2;
+      pts.push({ x: Math.cos(angle) * smoothed[idx], y: Math.sin(angle) * smoothed[idx] });
+    }
+    var SEGS = 20;
+    var center = [];
+    for (var seg = 0; seg < 18; seg++) {
+      var p0 = pts[(seg + 17) % 18];
+      var p1 = pts[seg];
+      var p2 = pts[(seg + 1) % 18];
+      var p3 = pts[(seg + 2) % 18];
+      for (var j = 0; j < SEGS; j++) {
+        center.push(catmullRomPoint2D(p0, p1, p2, p3, j / SEGS));
+      }
+    }
+    var d = 'M' + center[0].x.toFixed(1) + ' ' + center[0].y.toFixed(1);
+    for (var i = 1; i < center.length; i++) {
+      d += 'L' + center[i].x.toFixed(1) + ' ' + center[i].y.toFixed(1);
+    }
+    d += 'Z';
+    var n = center.length;
+    var tx = center[1].x - center[n - 1].x;
+    var ty = center[1].y - center[n - 1].y;
+    var tl = Math.sqrt(tx * tx + ty * ty);
+    var hw = TRACK_WIDTH / 2;
+    var snx = -ty / tl, sny = tx / tl;
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (var i = 0; i < center.length; i++) {
+      if (center[i].x - hw < minX) minX = center[i].x - hw;
+      if (center[i].x + hw > maxX) maxX = center[i].x + hw;
+      if (center[i].y - hw < minY) minY = center[i].y - hw;
+      if (center[i].y + hw > maxY) maxY = center[i].y + hw;
+    }
+    var pad = 5;
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' +
+      (minX - pad).toFixed(0) + ' ' + (minY - pad).toFixed(0) + ' ' +
+      (maxX - minX + pad * 2).toFixed(0) + ' ' + (maxY - minY + pad * 2).toFixed(0) +
+      '">' +
+      '<path d="' + d + '" fill="none" stroke="#555" stroke-width="' + TRACK_WIDTH + '" stroke-linejoin="round"/>' +
+      '<line x1="' + (center[0].x - snx * hw).toFixed(1) + '" y1="' + (center[0].y - sny * hw).toFixed(1) +
+      '" x2="' + (center[0].x + snx * hw).toFixed(1) + '" y2="' + (center[0].y + sny * hw).toFixed(1) +
+      '" stroke="#fff" stroke-width="3"/>' +
+      '</svg>';
   }
 
   // ── Track generation ──────────────────────────────────────────────
@@ -662,7 +794,7 @@
 
       if (e.code === 'Enter') {
         e.preventDefault();
-        if (gameState === 'menu') {
+        if (gameState === 'menu' && !recordsVisible) {
           startCountdown();
         } else if (gameState === 'finished') {
           if (seriesMode && currentStageIndex < stageCount - 1) {
@@ -673,14 +805,18 @@
         }
       }
 
-      if (e.code === 'Escape' && gameState === 'finished') {
+      if (e.code === 'Escape') {
         e.preventDefault();
-        restartRace();
+        if (recordsVisible) {
+          hideRecords();
+        } else if (gameState === 'finished') {
+          restartRace();
+        }
       }
 
       if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
-        if (gameState === 'menu') {
+        if (gameState === 'menu' && !recordsVisible) {
           startCountdown();
         } else if (gameState === 'racing' || gameState === 'countdown') {
           restartCurrentMap();
@@ -794,6 +930,14 @@
       totalLaps = Math.floor(Math.random() * 5) + 1;
       lapsValueEl.textContent = totalLaps;
       buildStageList();
+    });
+
+    recordsBtn.addEventListener('click', function () {
+      if (gameState === 'menu') showRecords();
+    });
+
+    recordsBackEl.addEventListener('click', function () {
+      hideRecords();
     });
   }
 
@@ -1045,6 +1189,127 @@
     } else {
       rebuildTrack(trackCodeInput.value);
     }
+  }
+
+  function showRecords() {
+    var records = getAllBestTimes();
+    recordsListEl.innerHTML = '';
+
+    if (records.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'records-empty';
+      empty.textContent = 'No records yet';
+      recordsListEl.appendChild(empty);
+    } else {
+      records.sort(function (a, b) {
+        if (a.code !== b.code) return a.code < b.code ? -1 : 1;
+        if (a.reversed !== b.reversed) return a.reversed ? 1 : -1;
+        if (a.nightMode !== b.nightMode) return a.nightMode ? 1 : -1;
+        return a.time - b.time;
+      });
+
+      for (var i = 0; i < records.length; i++) {
+        var rec = records[i];
+
+        var card = document.createElement('div');
+        card.className = 'record-card';
+
+        var svgDiv = document.createElement('div');
+        svgDiv.className = 'record-card-svg';
+        svgDiv.innerHTML = generateTrackSVG(rec.code);
+        card.appendChild(svgDiv);
+
+        var info = document.createElement('div');
+        info.className = 'record-card-info';
+
+        var codeP = document.createElement('p');
+        codeP.className = 'record-card-code';
+        codeP.textContent = rec.code;
+        info.appendChild(codeP);
+
+        var row = document.createElement('div');
+        row.className = 'record-card-row';
+
+        var time = document.createElement('span');
+        time.className = 'record-time';
+        time.textContent = formatTime(rec.time);
+        row.appendChild(time);
+
+        var laps = document.createElement('span');
+        laps.className = 'record-laps';
+        laps.textContent = rec.laps + 'L';
+        row.appendChild(laps);
+
+        var dir = document.createElement('span');
+        dir.className = 'record-dir';
+        dir.textContent = rec.reversed ? 'REV' : 'FWD';
+        row.appendChild(dir);
+
+        var mode = document.createElement('span');
+        mode.className = 'record-mode';
+        mode.textContent = rec.nightMode ? 'NIGHT' : 'DAY';
+        row.appendChild(mode);
+
+        if (rec.date) {
+          var dateSpan = document.createElement('span');
+          dateSpan.className = 'record-date';
+          var d = new Date(rec.date);
+          dateSpan.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+          row.appendChild(dateSpan);
+        }
+
+        var retryBtn = document.createElement('button');
+        retryBtn.className = 'record-retry';
+        retryBtn.type = 'button';
+        retryBtn.textContent = 'RETRY';
+        (function (r) {
+          retryBtn.addEventListener('click', function () { retryRecord(r); });
+        })(rec);
+        row.appendChild(retryBtn);
+
+        info.appendChild(row);
+        card.appendChild(info);
+        recordsListEl.appendChild(card);
+      }
+    }
+
+    overlay.classList.add('hidden');
+    recordsEl.classList.remove('hidden');
+    recordsVisible = true;
+  }
+
+  function retryRecord(rec) {
+    seriesMode = false;
+    reversed = rec.reversed;
+    nightMode = rec.nightMode;
+    totalLaps = rec.laps;
+
+    trackCodeInput.value = rec.code;
+    lapsValueEl.textContent = totalLaps;
+
+    dirToggleBtn.querySelector('.selected').classList.remove('selected');
+    dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+
+    modeToggleBtn.querySelector('.selected').classList.remove('selected');
+    modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+
+    raceTypeBtn.querySelector('.selected').classList.remove('selected');
+    raceTypeBtn.querySelector('[data-val="SINGLE"]').classList.add('selected');
+    singleConfigEl.style.display = '';
+    seriesConfigEl.style.display = 'none';
+    lapsLabel.textContent = 'LAPS';
+
+    recordsEl.classList.add('hidden');
+    recordsVisible = false;
+
+    rebuildTrack(rec.code);
+    startCountdown();
+  }
+
+  function hideRecords() {
+    recordsEl.classList.add('hidden');
+    overlay.classList.remove('hidden');
+    recordsVisible = false;
   }
 
   // ── Camera ────────────────────────────────────────────────────────

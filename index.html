@@ -353,6 +353,106 @@
       letter-spacing: 4px;
       font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
     }
+
+    #records-btn {
+      font-size: 12px; padding: 8px 20px; margin-top: 20px;
+      letter-spacing: 3px;
+    }
+
+    #records {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      transition: opacity 0.3s;
+      z-index: 30;
+      overflow-y: auto; padding: 40px 20px;
+    }
+    #records.hidden { opacity: 0; pointer-events: none; }
+    #records h2 {
+      color: #fff; font-size: 36px; margin-bottom: 24px; font-weight: 600;
+      letter-spacing: 8px;
+      font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
+    }
+    #records-list {
+      overflow-x: hidden;
+      overflow-y: auto;
+      max-height: 60vh;
+      scrollbar-gutter: stable;
+    }
+    .record-card {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 14px 20px;
+      margin-bottom: 8px;
+      min-width: 420px;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+    }
+    .record-card-svg {
+      flex-shrink: 0;
+      width: 56px;
+      height: 56px;
+    }
+    .record-card-svg svg {
+      width: 100%;
+      height: 100%;
+    }
+    .record-card-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .record-card-code {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 11px; letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .record-card-row {
+      display: flex; align-items: center; gap: 16px;
+    }
+    .record-time {
+      color: #4ecdc4; font-weight: 700; font-size: 16px; min-width: 80px;
+    }
+    .record-laps {
+      color: rgba(255, 255, 255, 0.4); font-size: 12px;
+      min-width: 28px; text-align: center;
+    }
+    .record-dir, .record-mode {
+      color: rgba(255, 255, 255, 0.35); font-size: 12px;
+      min-width: 36px;
+    }
+    .record-date {
+      color: rgba(255, 255, 255, 0.2); font-size: 11px;
+    }
+    .record-retry {
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-size: 11px; font-weight: 600;
+      padding: 4px 12px;
+      letter-spacing: 1px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.45);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-left: auto;
+    }
+    .record-retry:hover {
+      border-color: #4ecdc4;
+      color: #4ecdc4;
+      background: rgba(78, 205, 196, 0.08);
+    }
+    .record-retry:active { transform: scale(0.94); }
+    .records-empty {
+      color: rgba(255, 255, 255, 0.25);
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-size: 14px; margin-top: 40px;
+    }
   </style>
 </head>
 <body>
@@ -425,6 +525,7 @@
       </div>
     </div>
     <p class="start-prompt">Press ENTER to start</p>
+    <button id="records-btn" type="button">BEST RUNS</button>
     <a href="https://github.com/DavidCorrea/carreritas" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
 
@@ -439,6 +540,12 @@
     <p id="results-track-code"><span id="results-track-text"></span><button id="copy-track-btn" type="button" title="Copy track code">&#9112;</button></p>
     <ul id="results-list"></ul>
     <p class="start-prompt">ENTER Retry &middot; ESC Menu</p>
+  </div>
+
+  <div id="records" class="hidden">
+    <h2>BEST RUNS</h2>
+    <div id="records-list"></div>
+    <p class="start-prompt" id="records-back" style="font-size: 14px; margin-top: 32px; cursor: pointer;">ESC Back</p>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
