@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAX RACE</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    canvas { display: block; }
+
+    #hud {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none; display: none;
+    }
+
+    .hud-box {
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    #lap-display { position: absolute; top: 20px; left: 20px; }
+    #lap-times-list {
+      position: absolute; top: 56px; left: 20px;
+      font-size: 14px;
+    }
+    #best-display { position: absolute; top: 20px; right: 20px; }
+    #time-display { position: absolute; top: 56px; right: 20px; font-size: 16px; }
+    #speed-display {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      font-size: 22px;
+    }
+
+    #overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.75);
+      transition: opacity 0.3s;
+    }
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+
+    #overlay h1 {
+      color: #fff; font-size: 72px; font-weight: 900;
+      letter-spacing: 8px; margin-bottom: 30px;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    #overlay .subtitle {
+      color: #aaa; font-size: 16px; margin: 6px 0;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+    }
+
+    .track-label {
+      color: #777; font-size: 11px; margin-top: 32px;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      letter-spacing: 3px; text-transform: uppercase;
+    }
+    .track-input-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    }
+    #track-code-input {
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-size: 20px; letter-spacing: 2px; text-align: center;
+      padding: 10px 14px; border-radius: 6px; width: 340px; outline: none;
+    }
+    #track-code-input:focus { border-color: #4ecdc4; }
+    #random-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      color: #888; font-size: 14px; padding: 11px 14px;
+      border-radius: 6px; cursor: pointer;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-weight: bold; letter-spacing: 1px;
+    }
+    #random-btn:hover { border-color: #4ecdc4; color: #4ecdc4; }
+
+    .laps-row {
+      display: flex; align-items: center; gap: 12px; margin-top: 8px;
+    }
+    .laps-row button {
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      color: #888; font-size: 18px; width: 38px; height: 38px;
+      border-radius: 6px; cursor: pointer;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-weight: bold;
+    }
+    .laps-row button:hover { border-color: #4ecdc4; color: #4ecdc4; }
+    #laps-value {
+      color: #fff; font-size: 20px; min-width: 24px; text-align: center;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-weight: bold;
+    }
+
+    .start-prompt {
+      color: #4ecdc4; font-size: 20px; margin-top: 36px;
+      animation: pulse 1.5s ease-in-out infinite;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #countdown {
+      position: absolute; inset: 0;
+      display: none; align-items: center; justify-content: center;
+      font-size: 140px; color: #fff; font-weight: 900;
+      pointer-events: none;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    #results {
+      position: absolute; inset: 0;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.82);
+    }
+    #results h2 { color: #fff; font-size: 48px; margin-bottom: 10px; font-weight: 900; letter-spacing: 4px; }
+    #results-track-code {
+      color: #666; font-size: 14px; margin-bottom: 24px;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      letter-spacing: 2px;
+    }
+    #results-list {
+      list-style: none; color: #fff; font-size: 18px;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+    }
+    #results-list li { margin: 6px 0; padding: 8px 28px; border-radius: 4px; }
+    #results-list li.player { background: rgba(232, 77, 77, 0.3); }
+    #results-list li.best { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; }
+    #results-list li.lap-time { color: #999; font-size: 15px; padding: 4px 28px; }
+    #results-list li.lap-fastest { color: #4ecdc4; }
+    #results .new-record { color: #4ecdc4; font-size: 28px; font-weight: 900; margin-bottom: 20px; letter-spacing: 3px; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="lap-display" class="hud-box">LAP 1 / 3</div>
+    <div id="lap-times-list"></div>
+    <div id="best-display" class="hud-box">BEST --:--.--</div>
+    <div id="time-display" class="hud-box">0:00.00</div>
+    <div id="speed-display" class="hud-box">0 km/h</div>
+  </div>
+
+  <div id="overlay">
+    <h1>HAX RACE</h1>
+    <p class="subtitle">W / &#8593; Accelerate &nbsp;&nbsp; S / &#8595; Brake</p>
+    <p class="subtitle">A / &#8592; Steer Left &nbsp;&nbsp; D / &#8594; Steer Right</p>
+    <p class="track-label">TRACK CODE</p>
+    <div class="track-input-row">
+      <input id="track-code-input" type="text" maxlength="18" value="HAXRACE_CIRCUIT_01" spellcheck="false" autocomplete="off">
+      <button id="random-btn" type="button">RNG</button>
+    </div>
+    <p class="track-label">LAPS</p>
+    <div class="laps-row">
+      <button id="laps-minus" type="button">-</button>
+      <span id="laps-value">3</span>
+      <button id="laps-plus" type="button">+</button>
+    </div>
+    <p class="track-label">DIRECTION</p>
+    <div class="laps-row">
+      <button id="dir-toggle" type="button">&#8634;</button>
+      <span id="dir-value">FWD</span>
+    </div>
+    <p class="start-prompt">Press ENTER to start</p>
+  </div>
+
+  <div id="countdown"></div>
+
+  <div id="results">
+    <h2>RACE COMPLETE</h2>
+    <p id="results-track-code"></p>
+    <ul id="results-list"></ul>
+    <p class="start-prompt">Press ENTER to play again</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
