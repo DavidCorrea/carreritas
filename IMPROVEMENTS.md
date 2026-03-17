@@ -1,12 +1,5 @@
 # Improvements
 
-## README is outdated
-
-The README references "5 AI opponents" which don't exist in the current codebase. It also doesn't mention the track code system, direction/mode toggles, ghost replays, or series mode.
-
-**Where:** `README.md`
-**Why it matters:** Misleads anyone reading the README about what the game actually does.
-
 ## Three.js deprecation warning
 
 The game loads `three.min.js` from CDN at version 0.150.0. Three.js warns that `build/three.js` and `build/three.min.js` are deprecated as of r150 and will be removed in r160. The migration path is ES Modules.
