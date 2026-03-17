@@ -9,12 +9,25 @@
   var GRIP = 3.5;
   var totalLaps = 3;
   var reversed = false;
+  var nightMode = false;
   var VIEW_SIZE = 450;
   var CAMERA_HEIGHT = 300;
   var TRACK_SAMPLES = 400;
   var DEFAULT_CODE = 'HAXRACE_CIRCUIT_01';
   var RECORD_INTERVAL = 0.05;
   var STORAGE_PREFIX = 'haxrace_ghost_';
+
+  var seriesMode = false;
+  var stageCount = 3;
+  var stageConfigs = [
+    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
+    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
+    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
+    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
+    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false }
+  ];
+  var currentStageIndex = 0;
+  var seriesResults = [];
 
   var PLAYER_COLOR = 0xe84d4d;
   var GHOST_COLOR = 0x4da6e8;
@@ -25,6 +38,7 @@
   var player;
   var ghostMesh;
   var keys = {};
+  var nightCanvas, nightCtx;
   var gameState = 'menu';
   var raceTimer = 0;
   var countdownTimer = 0;
@@ -56,6 +70,18 @@
   var lapsPlusBtn = document.getElementById('laps-plus');
   var dirToggleBtn = document.getElementById('dir-toggle');
   var dirValueEl = document.getElementById('dir-value');
+  var modeToggleBtn = document.getElementById('mode-toggle');
+  var modeValueEl = document.getElementById('mode-value');
+  var raceTypeBtn = document.getElementById('race-type-toggle');
+  var raceTypeValue = document.getElementById('race-type-value');
+  var singleConfigEl = document.getElementById('single-config');
+  var seriesConfigEl = document.getElementById('series-config');
+  var stagesValueEl = document.getElementById('stages-value');
+  var stagesMinusBtn = document.getElementById('stages-minus');
+  var stagesPlusBtn = document.getElementById('stages-plus');
+  var rngAllBtn = document.getElementById('rng-all-btn');
+  var stageListEl = document.getElementById('stage-list');
+  var stageDisplayEl = document.getElementById('stage-display');
 
   // ── Persistence (per track code) ──────────────────────────────────
   function storageKey(code) {
@@ -444,7 +470,8 @@
       var expected = reversed ? (player.currentSector + 3) % 4 : (player.currentSector + 1) % 4;
       if (sector === expected) {
         player.sectorsVisited++;
-        if (sector === 0 && player.sectorsVisited >= 4) {
+        var finishSector = reversed ? 3 : 0;
+        if (sector === finishSector && player.sectorsVisited >= 4) {
           var lapTime = raceTimer - player.lapStartTime;
           player.lapTimes.push(lapTime);
           player.lapStartTime = raceTimer;
@@ -461,27 +488,107 @@
     }
   }
 
+  // ── Series ────────────────────────────────────────────────────────
+  function buildStageList() {
+    stageListEl.innerHTML = '';
+    for (var i = 0; i < stageCount; i++) {
+      var row = document.createElement('div');
+      row.className = 'stage-row';
+
+      var num = document.createElement('span');
+      num.className = 'stage-num';
+      num.textContent = '#' + (i + 1);
+      row.appendChild(num);
+
+      var input = document.createElement('input');
+      input.className = 'stage-code';
+      input.type = 'text';
+      input.maxLength = 18;
+      input.value = stageConfigs[i].code;
+      input.spellcheck = false;
+      input.autocomplete = 'off';
+      (function (idx) {
+        input.addEventListener('input', function (e) {
+          stageConfigs[idx].code = e.target.value;
+        });
+      })(i);
+      row.appendChild(input);
+
+      var rngBtn = document.createElement('button');
+      rngBtn.className = 'stage-btn';
+      rngBtn.type = 'button';
+      rngBtn.textContent = 'RNG';
+      (function (idx, inp) {
+        rngBtn.addEventListener('click', function () {
+          var code = randomCode();
+          stageConfigs[idx].code = code;
+          inp.value = code;
+        });
+      })(i, input);
+      row.appendChild(rngBtn);
+
+      var dirBtn = document.createElement('button');
+      dirBtn.className = 'stage-btn';
+      dirBtn.type = 'button';
+      dirBtn.textContent = stageConfigs[i].reversed ? 'REV' : 'FWD';
+      (function (idx, btn) {
+        btn.addEventListener('click', function () {
+          stageConfigs[idx].reversed = !stageConfigs[idx].reversed;
+          btn.textContent = stageConfigs[idx].reversed ? 'REV' : 'FWD';
+        });
+      })(i, dirBtn);
+      row.appendChild(dirBtn);
+
+      var modeBtn = document.createElement('button');
+      modeBtn.className = 'stage-btn';
+      modeBtn.type = 'button';
+      modeBtn.textContent = stageConfigs[i].nightMode ? '\u263E' : '\u2600';
+      (function (idx, btn) {
+        btn.addEventListener('click', function () {
+          stageConfigs[idx].nightMode = !stageConfigs[idx].nightMode;
+          btn.textContent = stageConfigs[idx].nightMode ? '\u263E' : '\u2600';
+        });
+      })(i, modeBtn);
+      row.appendChild(modeBtn);
+
+      stageListEl.appendChild(row);
+    }
+  }
+
+  function advanceToNextStage() {
+    currentStageIndex++;
+    resultsEl.style.display = 'none';
+    startCountdown();
+  }
+
   // ── Input ─────────────────────────────────────────────────────────
   function setupInput() {
     window.addEventListener('keydown', function (e) {
       keys[e.code] = true;
 
       if (e.code === 'Enter') {
+        e.preventDefault();
         if (gameState === 'menu') {
-          trackCodeInput.blur();
           startCountdown();
         } else if (gameState === 'finished') {
-          restartRace();
+          if (seriesMode && currentStageIndex < stageCount - 1) {
+            advanceToNextStage();
+          } else {
+            restartRace();
+          }
         }
       }
 
-      if (e.code === 'Space' && document.activeElement !== trackCodeInput) {
+      if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
         if (gameState === 'menu') {
-          trackCodeInput.blur();
           startCountdown();
         } else if (gameState === 'finished') {
-          restartRace();
+          if (seriesMode && currentStageIndex < stageCount - 1) {
+            advanceToNextStage();
+          } else {
+            restartRace();
+          }
         }
       }
     });
@@ -521,6 +628,46 @@
       dirValueEl.textContent = reversed ? 'REV' : 'FWD';
       if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
     });
+
+    modeToggleBtn.addEventListener('click', function () {
+      nightMode = !nightMode;
+      modeValueEl.textContent = nightMode ? 'NIGHT' : 'DAY';
+      modeToggleBtn.innerHTML = nightMode ? '&#9790;' : '&#9788;';
+    });
+
+    raceTypeBtn.addEventListener('click', function () {
+      seriesMode = !seriesMode;
+      raceTypeValue.textContent = seriesMode ? 'SERIES' : 'SINGLE';
+      singleConfigEl.style.display = seriesMode ? 'none' : '';
+      seriesConfigEl.style.display = seriesMode ? '' : 'none';
+      if (seriesMode) buildStageList();
+      if (!seriesMode && gameState === 'menu') rebuildTrack(trackCodeInput.value);
+    });
+
+    stagesMinusBtn.addEventListener('click', function () {
+      if (stageCount > 2) {
+        stageCount--;
+        stagesValueEl.textContent = stageCount;
+        buildStageList();
+      }
+    });
+
+    stagesPlusBtn.addEventListener('click', function () {
+      if (stageCount < 5) {
+        stageCount++;
+        stagesValueEl.textContent = stageCount;
+        buildStageList();
+      }
+    });
+
+    rngAllBtn.addEventListener('click', function () {
+      for (var i = 0; i < stageCount; i++) {
+        stageConfigs[i].code = randomCode();
+        stageConfigs[i].reversed = Math.random() > 0.5;
+        stageConfigs[i].nightMode = Math.random() > 0.5;
+      }
+      buildStageList();
+    });
   }
 
   function getPlayerInput() {
@@ -548,10 +695,24 @@
     bestDisplay.textContent = 'BEST ' + (bestTime ? formatTime(bestTime) : '--:--.--');
     timeDisplay.textContent = formatTime(raceTimer);
     speedDisplay.textContent = Math.round(player.speed * 1.2) + ' km/h';
+    if (seriesMode) {
+      stageDisplayEl.style.display = 'block';
+      stageDisplayEl.textContent = 'STAGE ' + (currentStageIndex + 1) + ' / ' + stageCount;
+    } else {
+      stageDisplayEl.style.display = 'none';
+    }
   }
 
   // ── Game state ────────────────────────────────────────────────────
   function startCountdown() {
+    if (seriesMode) {
+      if (currentStageIndex === 0) seriesResults = [];
+      var stage = stageConfigs[currentStageIndex];
+      reversed = stage.reversed;
+      nightMode = stage.nightMode;
+      currentTrackCode = stage.code;
+      rebuildTrack(stage.code);
+    }
     gameState = 'countdown';
     overlay.classList.add('hidden');
     hud.style.display = 'block';
@@ -589,49 +750,111 @@
     hud.style.display = 'none';
     resultsEl.style.display = 'flex';
     resultsList.innerHTML = '';
-    resultsTrackCode.textContent = 'Track: ' + currentTrackCode;
 
     recording.push({ t: raceTimer, x: player.x, z: player.z, a: player.angle });
     var isNewBest = !bestTime || player.finishTime < bestTime;
-    if (isNewBest) {
-      saveBest(currentTrackCode, player.finishTime, recording);
-    }
+    if (isNewBest) saveBest(currentTrackCode, player.finishTime, recording);
 
     var existingRecord = resultsEl.querySelector('.new-record');
     if (existingRecord) existingRecord.remove();
 
-    if (isNewBest) {
-      var badge = document.createElement('p');
-      badge.className = 'new-record';
-      badge.textContent = 'NEW RECORD!';
-      resultsEl.insertBefore(badge, resultsList);
-    }
+    var resultsH2 = resultsEl.querySelector('h2');
+    var promptEl = resultsEl.querySelector('.start-prompt');
 
-    var li = document.createElement('li');
-    li.className = 'player';
-    li.textContent = 'TIME  ' + formatTime(player.finishTime);
-    li.style.color = '#' + PLAYER_COLOR.toString(16).padStart(6, '0');
-    resultsList.appendChild(li);
+    if (seriesMode) {
+      seriesResults.push({
+        code: currentTrackCode,
+        reversed: reversed,
+        nightMode: nightMode,
+        time: player.finishTime,
+        lapTimes: player.lapTimes.slice(),
+        isNewBest: isNewBest
+      });
 
-    var li2 = document.createElement('li');
-    li2.className = 'best';
-    li2.textContent = 'BEST  ' + formatTime(bestTime);
-    resultsList.appendChild(li2);
+      var isFinalStage = currentStageIndex >= stageCount - 1;
 
-    if (!isNewBest) {
-      var li3 = document.createElement('li');
-      li3.textContent = 'DELTA  +' + (player.finishTime - bestTime).toFixed(2) + 's';
-      li3.style.color = '#e8944d';
-      resultsList.appendChild(li3);
-    }
+      if (isFinalStage) {
+        resultsH2.textContent = 'SERIES COMPLETE';
+        var totalTime = 0;
+        for (var s = 0; s < seriesResults.length; s++) totalTime += seriesResults[s].time;
+        resultsTrackCode.textContent = stageCount + ' stages \u00B7 ' + formatTime(totalTime);
 
-    var fastestLap = Math.min.apply(null, player.lapTimes);
-    for (var i = 0; i < player.lapTimes.length; i++) {
-      var lapLi = document.createElement('li');
-      lapLi.className = 'lap-time';
-      lapLi.textContent = 'L' + (i + 1) + '  ' + formatTime(player.lapTimes[i]);
-      if (player.lapTimes[i] === fastestLap) lapLi.className += ' lap-fastest';
-      resultsList.appendChild(lapLi);
+        for (var s = 0; s < seriesResults.length; s++) {
+          var sr = seriesResults[s];
+          var stageLi = document.createElement('li');
+          stageLi.className = 'lap-time';
+          var dirLabel = sr.reversed ? 'REV' : 'FWD';
+          var modeLabel = sr.nightMode ? 'NGT' : 'DAY';
+          stageLi.textContent = '#' + (s + 1) + '  ' + formatTime(sr.time) + '  ' + dirLabel + ' ' + modeLabel;
+          if (sr.isNewBest) stageLi.className += ' lap-fastest';
+          resultsList.appendChild(stageLi);
+        }
+        promptEl.textContent = 'Press ENTER to play again';
+      } else {
+        resultsH2.textContent = 'STAGE ' + (currentStageIndex + 1) + ' COMPLETE';
+        resultsTrackCode.textContent = currentTrackCode;
+
+        if (isNewBest) {
+          var badge = document.createElement('p');
+          badge.className = 'new-record';
+          badge.textContent = 'NEW RECORD!';
+          resultsEl.insertBefore(badge, resultsList);
+        }
+
+        var li = document.createElement('li');
+        li.className = 'player';
+        li.textContent = 'TIME  ' + formatTime(player.finishTime);
+        li.style.color = '#' + PLAYER_COLOR.toString(16).padStart(6, '0');
+        resultsList.appendChild(li);
+
+        var fastestLap = Math.min.apply(null, player.lapTimes);
+        for (var i = 0; i < player.lapTimes.length; i++) {
+          var lapLi = document.createElement('li');
+          lapLi.className = 'lap-time';
+          lapLi.textContent = 'L' + (i + 1) + '  ' + formatTime(player.lapTimes[i]);
+          if (player.lapTimes[i] === fastestLap) lapLi.className += ' lap-fastest';
+          resultsList.appendChild(lapLi);
+        }
+        promptEl.textContent = 'Press ENTER for Stage ' + (currentStageIndex + 2);
+      }
+    } else {
+      resultsH2.textContent = 'RACE COMPLETE';
+      resultsTrackCode.textContent = 'Track: ' + currentTrackCode;
+
+      if (isNewBest) {
+        var badge = document.createElement('p');
+        badge.className = 'new-record';
+        badge.textContent = 'NEW RECORD!';
+        resultsEl.insertBefore(badge, resultsList);
+      }
+
+      var li = document.createElement('li');
+      li.className = 'player';
+      li.textContent = 'TIME  ' + formatTime(player.finishTime);
+      li.style.color = '#' + PLAYER_COLOR.toString(16).padStart(6, '0');
+      resultsList.appendChild(li);
+
+      var li2 = document.createElement('li');
+      li2.className = 'best';
+      li2.textContent = 'BEST  ' + formatTime(bestTime);
+      resultsList.appendChild(li2);
+
+      if (!isNewBest) {
+        var li3 = document.createElement('li');
+        li3.textContent = 'DELTA  +' + (player.finishTime - bestTime).toFixed(2) + 's';
+        li3.style.color = '#e8944d';
+        resultsList.appendChild(li3);
+      }
+
+      var fastestLap = Math.min.apply(null, player.lapTimes);
+      for (var i = 0; i < player.lapTimes.length; i++) {
+        var lapLi = document.createElement('li');
+        lapLi.className = 'lap-time';
+        lapLi.textContent = 'L' + (i + 1) + '  ' + formatTime(player.lapTimes[i]);
+        if (player.lapTimes[i] === fastestLap) lapLi.className += ' lap-fastest';
+        resultsList.appendChild(lapLi);
+      }
+      promptEl.textContent = 'Press ENTER to play again';
     }
   }
 
@@ -646,7 +869,13 @@
     resultsEl.style.display = 'none';
     overlay.classList.remove('hidden');
     gameState = 'menu';
-    rebuildTrack(trackCodeInput.value);
+    currentStageIndex = 0;
+    seriesResults = [];
+    if (seriesMode) {
+      rebuildTrack(stageConfigs[0].code);
+    } else {
+      rebuildTrack(trackCodeInput.value);
+    }
   }
 
   // ── Camera ────────────────────────────────────────────────────────
@@ -654,6 +883,94 @@
     camera.position.x += (player.x - camera.position.x) * 0.08;
     camera.position.z += (player.z - camera.position.z) * 0.08;
     camera.lookAt(camera.position.x, 0, camera.position.z);
+  }
+
+  // ── Night mode ────────────────────────────────────────────────────
+  function createNightOverlay() {
+    nightCanvas = document.createElement('canvas');
+    nightCanvas.width = window.innerWidth;
+    nightCanvas.height = window.innerHeight;
+    var s = nightCanvas.style;
+    s.position = 'absolute';
+    s.top = '0';
+    s.left = '0';
+    s.pointerEvents = 'none';
+    s.zIndex = '10';
+    s.display = 'none';
+    document.body.appendChild(nightCanvas);
+    nightCtx = nightCanvas.getContext('2d');
+  }
+
+  function renderNightOverlay() {
+    if (!nightMode || !player) {
+      nightCanvas.style.display = 'none';
+      return;
+    }
+    nightCanvas.style.display = 'block';
+
+    var w = nightCanvas.width;
+    var h = nightCanvas.height;
+    var ctx = nightCtx;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(0, 2, 8, 0.93)';
+    ctx.fillRect(0, 0, w, h);
+
+    var scale = w / VIEW_SIZE;
+    var sx = (player.x - camera.position.x) * scale + w / 2;
+    var sy = (player.z - camera.position.z) * scale + h / 2;
+    var screenAngle = Math.atan2(Math.cos(player.angle), Math.sin(player.angle));
+
+    ctx.globalCompositeOperation = 'destination-out';
+
+    var ambR = 28 * scale;
+    var ambGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, ambR);
+    ambGrad.addColorStop(0, 'rgba(255,255,255,0.5)');
+    ambGrad.addColorStop(0.5, 'rgba(255,255,255,0.12)');
+    ambGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = ambGrad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ambR, 0, Math.PI * 2);
+    ctx.fill();
+
+    var beamLen = 150 * scale;
+    drawHeadlightBeam(ctx, sx, sy, screenAngle - 0.06, beamLen, 0.35, scale);
+    drawHeadlightBeam(ctx, sx, sy, screenAngle + 0.06, beamLen, 0.35, scale);
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    var tailAngle = screenAngle + Math.PI;
+    var tailOff = CAR_RADIUS * scale * 0.5;
+    var tailX = sx + Math.cos(tailAngle) * tailOff;
+    var tailY = sy + Math.sin(tailAngle) * tailOff;
+    var tailR = 12 * scale;
+    var tailGrad = ctx.createRadialGradient(tailX, tailY, 0, tailX, tailY, tailR);
+    tailGrad.addColorStop(0, 'rgba(255, 20, 0, 0.15)');
+    tailGrad.addColorStop(1, 'rgba(255, 20, 0, 0)');
+    ctx.fillStyle = tailGrad;
+    ctx.beginPath();
+    ctx.arc(tailX, tailY, tailR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawHeadlightBeam(ctx, sx, sy, angle, length, spread, scale) {
+    var offset = CAR_RADIUS * scale * 0.6;
+    var ox = sx + Math.cos(angle) * offset;
+    var oy = sy + Math.sin(angle) * offset;
+
+    var grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, length);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.3, 'rgba(255,255,255,0.85)');
+    grad.addColorStop(0.65, 'rgba(255,255,255,0.3)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.arc(ox, oy, length, angle - spread, angle + spread);
+    ctx.closePath();
+    ctx.fill();
   }
 
   // ── Main loop ─────────────────────────────────────────────────────
@@ -691,6 +1008,7 @@
     }
 
     renderer.render(scene, camera);
+    renderNightOverlay();
   }
 
   // ── Init ──────────────────────────────────────────────────────────
@@ -710,6 +1028,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.prepend(renderer.domElement);
+    createNightOverlay();
 
     var ground = new THREE.Mesh(
       new THREE.PlaneGeometry(2000, 2000),
@@ -728,6 +1047,8 @@
       camera.top = hh; camera.bottom = -hh;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      nightCanvas.width = window.innerWidth;
+      nightCanvas.height = window.innerHeight;
     });
 
     requestAnimationFrame(gameLoop);
