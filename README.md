@@ -20,6 +20,17 @@ npx serve .
 | S / Down Arrow | Brake / Reverse |
 | A / Left Arrow | Steer Left |
 | D / Right Arrow | Steer Right |
-| Space | Start / Restart |
+| Enter | Start race |
+| Space | Restart race |
+| C | Cycle camera mode |
+| Escape | Back to menu (from results) |
 
-Complete 3 laps to finish the race. Beat the 5 AI opponents.
+## Features
+
+- **Track codes** — 18-character strings that deterministically generate a closed track shape. Random or hand-crafted.
+- **Ghost replay** — your best run is saved per track and shown as a translucent blue car on the next attempt.
+- **Direction** — race each track forward (FWD) or reversed (REV). Best times are tracked separately.
+- **Night mode** — dark track with 3D headlight beams that follow the car.
+- **Series mode** — chain 2–5 stages with independent track codes, directions, and modes.
+- **Camera modes** — top-down, rotated, chase, and isometric views.
+- **Configurable laps** — 1 to 20 laps per race.

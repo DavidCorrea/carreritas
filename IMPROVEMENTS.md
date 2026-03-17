@@ -4,7 +4,7 @@
 
 The game loads `three.min.js` from CDN at version 0.150.0. Three.js warns that `build/three.js` and `build/three.min.js` are deprecated as of r150 and will be removed in r160. The migration path is ES Modules.
 
-**Where:** `index.html` line 255 (script tag)
+**Where:** `index.html` line 444 (script tag)
 **Why it matters:** The CDN URL will stop working when Three.js removes the legacy build files.
 
 ## No test infrastructure
@@ -113,17 +113,9 @@ At 3,000 users this architecture keeps the database small (challenge times are ~
 **Where:** architectural decision (affects backend schema and sync logic)
 **Why it matters:** Trying to store everything server-side creates an unbounded storage problem. Splitting by competitive/social vs. personal keeps costs predictable.
 
-## Ghost replay compression
+## Ghost replay compression — reduce sample rate
 
-Current ghost format stores `{ t, x, z, a }` as JSON at 20 samples/sec. A 1-minute race is ~48KB. Several optimizations, in order of effort vs. impact:
+Ghost replays already use delta encoding, quantization (positions ×10, angles ×100), and flat packed arrays — dropping timestamps and JSON overhead. The remaining optimization is reducing the sample rate from 10/sec (`RECORD_INTERVAL = 0.1`) to 5/sec (200ms). This would halve frame count with negligible visual impact on interpolation.
 
-1. **Drop the timestamp** — recording is at a fixed interval (`RECORD_INTERVAL`), so time is just `frame_index × interval`. Saves 25% immediately.
-2. **Reduce sample rate** — 5 samples/sec (200ms interval) is enough for smooth interpolation. Cuts frame count by 4x.
-3. **Flat array encoding** — store as `[x0, z0, a0, x1, z1, a1, ...]` instead of objects with repeated keys. Eliminates JSON overhead.
-4. **Quantize values** — positions to 1 decimal place (0.1 unit precision), angles to 2 decimal places (0.01 radian ≈ 0.6°). Store as integers.
-5. **Delta encoding** — store first frame absolute, subsequent frames as deltas from previous. Produces smaller numbers that compress better.
-
-Combined effect for a 1-minute race: ~48KB down to under 2KB (~25x reduction). Even just steps 1-2 alone (drop timestamp + 5/sec) get to ~5KB with minimal code changes. The full pipeline is worth implementing before adding server-side ghost sync.
-
-**Where:** `game.js` recording/replay logic, and future backend ghost storage
-**Why it matters:** Directly reduces localStorage usage, network transfer for ghost sync, and server storage costs. Multiplies across every user and every ghost.
+**Where:** `game.js` `RECORD_INTERVAL` constant
+**Why it matters:** Halves per-replay size in localStorage and future server storage. Worth doing before adding ghost sync.
