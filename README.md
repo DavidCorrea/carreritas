@@ -27,8 +27,9 @@ npx serve .
 
 ## Features
 
-- **Track codes** — 18-character strings that deterministically generate a closed track shape. Random or hand-crafted.
+- **Track codes** — 18-character strings that deterministically generate a closed track shape. Random or hand-crafted. The start/finish position varies per code.
 - **Ghost replay** — your best run is saved per track and shown as a translucent blue car on the next attempt.
+- **Best runs** — view all personal bests with track previews and retry any previous run directly.
 - **Direction** — race each track forward (FWD) or reversed (REV). Best times are tracked separately.
 - **Night mode** — the track is invisible except where your headlights reach. Fog hides everything beyond range. Best times are tracked separately from day.
 - **Series mode** — chain 2–5 stages with independent track codes, directions, and modes.

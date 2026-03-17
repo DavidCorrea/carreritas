@@ -2,7 +2,7 @@
 
 ## Track Code
 
-An 18-character string that deterministically generates a closed track shape. Each character's ASCII value maps to a radial distance at one of 18 evenly-spaced angles, which are smoothed and connected with a Catmull-Rom spline. The same code always produces the same track.
+An 18-character string that deterministically generates a closed track shape. Each character's ASCII value maps to a radial distance at one of 18 evenly-spaced angles, which are smoothed and connected with a Catmull-Rom spline. The starting point of the track is shifted by an offset derived from the sum of all character codes in the string — different codes produce different start/finish positions. The same code always produces the same track and the same start position.
 
 ## Lap
 
@@ -31,3 +31,7 @@ A sequence of 2–5 races (stages) played back-to-back. Each stage has its own t
 ## Stage
 
 One race within a series. Configured independently for track code, direction, and mode.
+
+## Best Runs (Records)
+
+A panel that lists all personal best times stored in localStorage. Each entry shows the track preview (SVG), track code, time, lap count, direction, mode, and date. Players can retry any record directly, which loads the track configuration and starts a countdown.
