@@ -13,18 +13,17 @@
   var VIEW_SIZE = 450;
   var CAMERA_HEIGHT = 300;
   var TRACK_SAMPLES = 400;
-  var DEFAULT_CODE = 'HAXRACE_CIRCUIT_01';
   var RECORD_INTERVAL = 0.05;
   var STORAGE_PREFIX = 'haxrace_ghost_';
 
   var seriesMode = false;
   var stageCount = 3;
   var stageConfigs = [
-    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
-    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
-    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
-    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false },
-    { code: 'HAXRACE_CIRCUIT_01', reversed: false, nightMode: false }
+    { code: '', reversed: false, nightMode: false },
+    { code: '', reversed: false, nightMode: false },
+    { code: '', reversed: false, nightMode: false },
+    { code: '', reversed: false, nightMode: false },
+    { code: '', reversed: false, nightMode: false }
   ];
   var currentStageIndex = 0;
   var seriesResults = [];
@@ -45,7 +44,7 @@
   var countdownValue = 0;
   var lastTime = 0;
   var rebuildTimer;
-  var currentTrackCode = DEFAULT_CODE;
+  var currentTrackCode = '';
 
   var recording = [];
   var recordAccum = 0;
@@ -1037,7 +1036,10 @@
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    rebuildTrack(DEFAULT_CODE);
+    var startCode = randomCode();
+    trackCodeInput.value = startCode;
+    for (var i = 0; i < stageConfigs.length; i++) stageConfigs[i].code = randomCode();
+    rebuildTrack(startCode);
     setupInput();
 
     window.addEventListener('resize', function () {
