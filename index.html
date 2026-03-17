@@ -18,7 +18,7 @@
       background: rgba(0, 0, 0, 0.55);
       color: #fff;
       padding: 8px 16px;
-      border-radius: 6px;
+      border-radius: 5px;
       font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
       font-size: 18px;
       font-weight: bold;
@@ -26,176 +26,333 @@
 
     #lap-display { position: absolute; top: 20px; left: 20px; }
     #lap-times-list {
-      position: absolute; top: 56px; left: 20px;
-      font-size: 14px;
+      position: absolute; top: 70px; left: 20px;
+      font-size: 13px;
     }
     #best-display { position: absolute; top: 20px; right: 20px; }
-    #time-display { position: absolute; top: 56px; right: 20px; font-size: 16px; }
+    #time-display { position: absolute; top: 70px; right: 20px; font-size: 15px; }
     #speed-display {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
       font-size: 22px;
+    }
+    #stage-display {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    }
+    #camera-display { position: absolute; bottom: 30px; right: 20px; font-size: 13px; }
+    #controls-hint {
+      position: absolute; bottom: 30px; left: 20px;
+      font-size: 11px; color: rgba(255, 255, 255, 0.35);
+      background: rgba(0, 0, 0, 0.35);
     }
 
     #overlay {
       position: absolute; inset: 0;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      background: rgba(0, 0, 0, 0.75);
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       transition: opacity 0.3s;
       z-index: 30;
-      overflow-y: auto; padding: 30px 0;
+      overflow-y: auto; padding: 40px 20px;
     }
     #overlay.hidden { opacity: 0; pointer-events: none; }
 
     #overlay h1 {
-      color: #fff; font-size: 72px; font-weight: 900;
-      letter-spacing: 8px; margin-bottom: 30px;
-      text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      color: #fff; font-size: 36px; font-weight: 600;
+      letter-spacing: 16px; margin-bottom: 18px;
+      font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
+      padding-bottom: 18px;
+      border-bottom: 2px solid rgba(78, 205, 196, 0.4);
     }
     #overlay .subtitle {
-      color: #aaa; font-size: 16px; margin: 6px 0;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 13px; margin: 3px 0;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
+    }
+
+    .menu-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      padding: 24px 36px 28px;
+      margin-top: 24px;
+      min-width: 420px;
+      display: flex; flex-direction: column; align-items: center;
     }
 
     .track-label {
-      color: #777; font-size: 11px; margin-top: 32px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 10px; margin-top: 20px;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
-      letter-spacing: 3px; text-transform: uppercase;
+      letter-spacing: 4px; text-transform: uppercase;
+      font-weight: 600;
     }
+    .menu-card > .track-label:first-child { margin-top: 0; }
+
+    .dir-mode-row {
+      display: flex; gap: 32px; margin-top: 4px;
+    }
+    .dir-mode-group {
+      display: flex; flex-direction: column; align-items: center;
+    }
+
+    .seg-control {
+      display: flex; margin-top: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 5px; overflow: hidden;
+    }
+    .seg-option {
+      padding: 7px 16px;
+      font-size: 13px; letter-spacing: 1px;
+      border: none !important; border-radius: 0 !important;
+      background: transparent !important;
+      color: rgba(255, 255, 255, 0.3);
+      transition: all 0.15s;
+    }
+    .seg-option:hover:not(.selected) {
+      color: rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.03) !important;
+    }
+    .seg-option.selected {
+      background: rgba(78, 205, 196, 0.15) !important;
+      color: #4ecdc4 !important;
+    }
+    .seg-control-sm .seg-option {
+      padding: 4px 10px; font-size: 11px;
+    }
+
+    .menu-divider {
+      width: 100%; border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      margin-top: 20px;
+    }
+
     .track-input-row {
-      display: flex; align-items: center; gap: 8px; margin-top: 8px;
+      display: flex; align-items: stretch; gap: 8px; margin-top: 8px;
     }
     #track-code-input {
-      background: rgba(255, 255, 255, 0.08);
-      border: 2px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       color: #fff;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
-      font-size: 20px; letter-spacing: 2px; text-align: center;
-      padding: 10px 14px; border-radius: 6px; width: 340px; outline: none;
+      font-size: 18px; letter-spacing: 2px; text-align: center;
+      padding: 10px 14px; border-radius: 5px; width: 320px; outline: none;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
     }
-    #track-code-input:focus { border-color: #4ecdc4; }
-    #random-btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      color: #888; font-size: 14px; padding: 11px 14px;
-      border-radius: 6px; cursor: pointer;
+    #track-code-input:focus {
+      border-color: #4ecdc4;
+      background: rgba(78, 205, 196, 0.05);
+      box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
+    }
+
+    #overlay button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.45);
       font-family: "SF Mono", Monaco, "Courier New", monospace;
-      font-weight: bold; letter-spacing: 1px;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
     }
-    #random-btn:hover { border-color: #4ecdc4; color: #4ecdc4; }
+    #overlay button:hover {
+      border-color: #4ecdc4;
+      color: #4ecdc4;
+      background: rgba(78, 205, 196, 0.08);
+    }
+    #overlay button:active { transform: scale(0.94); }
+
+    #random-btn {
+      font-size: 13px; padding: 0 14px;
+      border-radius: 5px; letter-spacing: 1px;
+    }
+    #rng-all-btn {
+      font-size: 12px; padding: 0 14px;
+      letter-spacing: 1px; border-radius: 5px;
+      align-self: stretch;
+    }
 
     .laps-row {
-      display: flex; align-items: center; gap: 12px; margin-top: 8px;
+      display: flex; align-items: center; gap: 10px; margin-top: 8px;
     }
     .laps-row button {
-      background: rgba(255, 255, 255, 0.08);
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      color: #888; font-size: 18px; width: 38px; height: 38px;
-      border-radius: 6px; cursor: pointer;
-      font-family: "SF Mono", Monaco, "Courier New", monospace;
-      font-weight: bold;
-    }
-    .laps-row button:hover { border-color: #4ecdc4; color: #4ecdc4; }
-    #laps-value {
-      color: #fff; font-size: 20px; min-width: 24px; text-align: center;
-      font-family: "SF Mono", Monaco, "Courier New", monospace;
-      font-weight: bold;
+      font-size: 16px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
     }
 
-    .start-prompt {
-      color: #4ecdc4; font-size: 20px; margin-top: 36px;
-      animation: pulse 1.5s ease-in-out infinite;
+    .stepper {
+      display: flex; align-items: center; margin-top: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 5px; overflow: hidden;
+    }
+    .stepper button {
+      width: 38px; height: 38px;
+      font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      border: none !important; border-radius: 0 !important;
+      background: transparent !important;
+      color: rgba(255, 255, 255, 0.4);
+    }
+    .stepper button:hover {
+      background: rgba(78, 205, 196, 0.1) !important;
+      color: #4ecdc4 !important;
+    }
+    .stepper span {
+      color: #fff; font-size: 18px; min-width: 36px; text-align: center;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-weight: 700;
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 7px 4px;
+    }
+
+    #dir-value, #mode-value, #race-type-value {
+      color: #fff; font-size: 16px; min-width: 40px; text-align: center;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      font-weight: 700;
     }
 
     #single-config, #series-config {
       width: 100%; display: flex; flex-direction: column; align-items: center;
     }
-    #rng-all-btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      color: #888; font-size: 13px; padding: 8px 14px;
-      border-radius: 6px; cursor: pointer;
-      font-family: "SF Mono", Monaco, "Courier New", monospace;
-      font-weight: bold; letter-spacing: 1px; margin-left: 8px;
+
+    .stage-block {
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 5px;
+      padding: 10px 12px;
+      display: flex; align-items: center; gap: 1rem;
     }
-    #rng-all-btn:hover { border-color: #4ecdc4; color: #4ecdc4; }
+    .stage-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: .25rem;
+    }
     .stage-row {
-      display: flex; align-items: center; gap: 5px; margin-top: 5px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .stage-options {
+      display: flex; gap: 8px;
     }
     .stage-num {
-      color: #555; font-size: 12px; width: 20px; text-align: right;
+      color: rgba(255, 255, 255, 0.25);
+      font-size: 1.25rem; width: 20px; text-align: right;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
       font-weight: bold;
     }
     .stage-code {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       color: #fff;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
       font-size: 12px; letter-spacing: 1px; text-align: center;
-      padding: 5px 6px; border-radius: 4px; width: 170px; outline: none;
+      padding: 5px 6px; border-radius: 5px; width: 170px; outline: none;
+      transition: border-color 0.2s;
     }
     .stage-code:focus { border-color: #4ecdc4; }
     .stage-btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #888; font-size: 11px; padding: 5px 7px;
-      border-radius: 4px; cursor: pointer;
+      font-size: 11px; padding: 5px 7px;
+      border-radius: 5px;
+    }
+
+    .start-prompt {
+      color: #4ecdc4; font-size: 18px; margin-top: 28px;
+      animation: pulse 1.8s ease-in-out infinite;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
-      font-weight: bold;
+      letter-spacing: 1px;
     }
-    .stage-btn:hover { border-color: #4ecdc4; color: #4ecdc4; }
-    #stage-display {
-      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-    }
-    #camera-display { position: absolute; bottom: 30px; right: 20px; font-size: 13px; }
 
     .github-link {
-      color: #555; font-size: 12px; margin-top: 28px;
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 11px; margin-top: 20px;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
       letter-spacing: 2px; text-decoration: none;
-      pointer-events: auto;
+      pointer-events: auto; transition: color 0.2s;
     }
     .github-link:hover { color: #4ecdc4; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+      50% { opacity: 0.3; }
     }
 
     #countdown {
-      position: absolute; inset: 0;
+      position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
       display: none; align-items: center; justify-content: center;
-      font-size: 140px; color: #fff; font-weight: 900;
+      gap: 20px;
       pointer-events: none;
-      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
       z-index: 25;
+    }
+    .sem-light {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+    }
+    .sem-light.red {
+      background: #e84d4d;
+      border-color: #e84d4d;
+      box-shadow: 0 0 18px 6px rgba(232, 77, 77, 0.5);
+    }
+    .sem-light.green {
+      background: #4ecdc4;
+      border-color: #4ecdc4;
+      box-shadow: 0 0 18px 6px rgba(78, 205, 196, 0.5);
     }
 
     #results {
       position: absolute; inset: 0;
       display: none; flex-direction: column;
       align-items: center; justify-content: center;
-      background: rgba(0, 0, 0, 0.82);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       z-index: 30;
     }
-    #results h2 { color: #fff; font-size: 48px; margin-bottom: 10px; font-weight: 900; letter-spacing: 4px; }
+    #results h2 {
+      color: #fff; font-size: 36px; margin-bottom: 10px; font-weight: 600;
+      letter-spacing: 8px;
+      font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
+    }
     #results-track-code {
-      color: #666; font-size: 14px; margin-bottom: 24px;
+      color: rgba(255, 255, 255, 0.35); font-size: 14px; margin-bottom: 24px;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
       letter-spacing: 2px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    #copy-track-btn {
+      font-size: 14px; padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.35);
+      border-radius: 5px; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+      pointer-events: auto;
+    }
+    #copy-track-btn:hover {
+      border-color: #4ecdc4; color: #4ecdc4;
+      background: rgba(78, 205, 196, 0.08);
     }
     #results-list {
       list-style: none; color: #fff; font-size: 18px;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
+      text-align: center;
     }
-    #results-list li { margin: 6px 0; padding: 8px 28px; border-radius: 4px; }
+    #results-list li { margin: 6px 0; padding: 8px 28px; border-radius: 5px; text-align: center; }
     #results-list li.player { background: rgba(232, 77, 77, 0.3); }
     #results-list li.best { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; }
-    #results-list li.lap-time { color: #999; font-size: 15px; padding: 4px 28px; }
+    #results-list li.lap-time { color: rgba(255, 255, 255, 0.45); font-size: 15px; padding: 4px 28px; }
     #results-list li.lap-fastest { color: #4ecdc4; }
-    #results .new-record { color: #4ecdc4; font-size: 28px; font-weight: 900; margin-bottom: 20px; letter-spacing: 3px; }
+    #results .new-record {
+      color: #4ecdc4; font-size: 22px; font-weight: 700; margin-bottom: 20px;
+      letter-spacing: 4px;
+      font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
+    }
   </style>
 </head>
 <body>
@@ -205,8 +362,9 @@
     <div id="best-display" class="hud-box">BEST --:--.--</div>
     <div id="time-display" class="hud-box">0:00.00</div>
     <div id="speed-display" class="hud-box">0 km/h</div>
-    <div id="stage-display" class="hud-box"></div>
+    <div id="stage-display" class="hud-box" style="display:none"></div>
     <div id="camera-display" class="hud-box"></div>
+    <div id="controls-hint" class="hud-box">W/&#8593; S/&#8595; A/&#8592; D/&#8594; &nbsp; SPACE Restart &nbsp; C Camera</div>
   </div>
 
   <div id="overlay">
@@ -214,55 +372,73 @@
     <p class="subtitle">W / &#8593; Accelerate &nbsp;&nbsp; S / &#8595; Brake</p>
     <p class="subtitle">A / &#8592; Steer Left &nbsp;&nbsp; D / &#8594; Steer Right</p>
     <p class="subtitle">SPACE Restart &nbsp;&nbsp; C Camera</p>
-    <p class="track-label">RACE</p>
-    <div class="laps-row">
-      <button id="race-type-toggle" type="button">&#9654;</button>
-      <span id="race-type-value">SINGLE</span>
-    </div>
-    <div id="single-config">
-      <p class="track-label">TRACK CODE</p>
-      <div class="track-input-row">
-        <input id="track-code-input" type="text" maxlength="18" value="" spellcheck="false" autocomplete="off">
-        <button id="random-btn" type="button">RNG</button>
+    <div class="menu-card">
+      <p class="track-label">RACE</p>
+      <div class="seg-control" id="race-type-toggle">
+        <button type="button" class="seg-option selected" data-val="SINGLE">SINGLE</button>
+        <button type="button" class="seg-option" data-val="SERIES">SERIES</button>
       </div>
-      <p class="track-label">DIRECTION</p>
-      <div class="laps-row">
-        <button id="dir-toggle" type="button">&#8634;</button>
-        <span id="dir-value">FWD</span>
+      <span id="race-type-value" style="display:none">SINGLE</span>
+      <hr class="menu-divider">
+      <div id="single-config">
+        <p class="track-label">TRACK CODE</p>
+        <div class="track-input-row">
+          <input id="track-code-input" type="text" maxlength="18" value="" spellcheck="false" autocomplete="off">
+          <button id="random-btn" type="button">RNG</button>
+        </div>
+        <div class="dir-mode-row">
+          <div class="dir-mode-group">
+            <p class="track-label">DIRECTION</p>
+            <div class="seg-control" id="dir-toggle">
+              <button type="button" class="seg-option selected" data-val="FWD">FWD</button>
+              <button type="button" class="seg-option" data-val="REV">REV</button>
+            </div>
+            <span id="dir-value" style="display:none">FWD</span>
+          </div>
+          <div class="dir-mode-group">
+            <p class="track-label">MODE</p>
+            <div class="seg-control" id="mode-toggle">
+              <button type="button" class="seg-option selected" data-val="DAY">DAY</button>
+              <button type="button" class="seg-option" data-val="NIGHT">NIGHT</button>
+            </div>
+            <span id="mode-value" style="display:none">DAY</span>
+          </div>
+        </div>
       </div>
-      <p class="track-label">MODE</p>
-      <div class="laps-row">
-        <button id="mode-toggle" type="button">&#9788;</button>
-        <span id="mode-value">DAY</span>
+      <div id="series-config" style="display:none;">
+        <p class="track-label">STAGES</p>
+        <div style="display:flex; align-items:stretch; gap:10px; margin-top:8px;">
+          <div class="stepper" style="margin-top:0">
+            <button id="stages-minus" type="button">-</button>
+            <span id="stages-value">3</span>
+            <button id="stages-plus" type="button">+</button>
+          </div>
+          <button id="rng-all-btn" type="button">RNG ALL</button>
+        </div>
+        <div id="stage-list" style="margin-top:12px"></div>
       </div>
-    </div>
-    <div id="series-config" style="display:none;">
-      <p class="track-label">STAGES</p>
-      <div class="laps-row">
-        <button id="stages-minus" type="button">-</button>
-        <span id="stages-value">3</span>
-        <button id="stages-plus" type="button">+</button>
-        <button id="rng-all-btn" type="button">RNG ALL</button>
+      <p class="track-label" id="laps-label">LAPS</p>
+      <div class="stepper">
+        <button id="laps-minus" type="button">-</button>
+        <span id="laps-value">3</span>
+        <button id="laps-plus" type="button">+</button>
       </div>
-      <div id="stage-list"></div>
-    </div>
-    <p class="track-label">LAPS</p>
-    <div class="laps-row">
-      <button id="laps-minus" type="button">-</button>
-      <span id="laps-value">3</span>
-      <button id="laps-plus" type="button">+</button>
     </div>
     <p class="start-prompt">Press ENTER to start</p>
     <a href="https://github.com/DavidCorrea/carreritas" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
 
-  <div id="countdown"></div>
+  <div id="countdown">
+    <div class="sem-light"></div>
+    <div class="sem-light"></div>
+    <div class="sem-light"></div>
+  </div>
 
   <div id="results">
     <h2>RACE COMPLETE</h2>
-    <p id="results-track-code"></p>
+    <p id="results-track-code"><span id="results-track-text"></span><button id="copy-track-btn" type="button" title="Copy track code">&#9112;</button></p>
     <ul id="results-list"></ul>
-    <p class="start-prompt">Press ENTER to play again</p>
+    <p class="start-prompt">ENTER Retry &middot; ESC Menu</p>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>

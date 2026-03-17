@@ -64,12 +64,16 @@
   var speedDisplay = document.getElementById('speed-display');
   var overlay = document.getElementById('overlay');
   var countdownEl = document.getElementById('countdown');
+  var semLights = countdownEl.querySelectorAll('.sem-light');
   var resultsEl = document.getElementById('results');
   var resultsList = document.getElementById('results-list');
   var resultsTrackCode = document.getElementById('results-track-code');
+  var resultsTrackText = document.getElementById('results-track-text');
+  var copyTrackBtn = document.getElementById('copy-track-btn');
   var trackCodeInput = document.getElementById('track-code-input');
   var randomBtn = document.getElementById('random-btn');
   var lapsValueEl = document.getElementById('laps-value');
+  var lapsLabel = document.getElementById('laps-label');
   var lapsMinusBtn = document.getElementById('laps-minus');
   var lapsPlusBtn = document.getElementById('laps-plus');
   var dirToggleBtn = document.getElementById('dir-toggle');
@@ -384,6 +388,14 @@
     if (!bestReplay) return;
     var start = getStartPosition();
     ghostMesh = createCarMesh(GHOST_COLOR, start.x, start.z, start.angle, 0.35);
+    ghostMesh.traverse(function (child) {
+      if (child.isMesh && child.material.type === 'MeshLambertMaterial') {
+        var m = child.material;
+        child.material = new THREE.MeshBasicMaterial({
+          color: m.color, transparent: m.transparent, opacity: m.opacity
+        });
+      }
+    });
   }
 
   function updateGhost() {
@@ -535,13 +547,19 @@
   function buildStageList() {
     stageListEl.innerHTML = '';
     for (var i = 0; i < stageCount; i++) {
-      var row = document.createElement('div');
-      row.className = 'stage-row';
+      var block = document.createElement('div');
+      block.className = 'stage-block';
 
       var num = document.createElement('span');
       num.className = 'stage-num';
       num.textContent = '#' + (i + 1);
-      row.appendChild(num);
+      block.appendChild(num);
+
+      var content = document.createElement('div');
+      content.className = 'stage-content';
+
+      var topRow = document.createElement('div');
+      topRow.className = 'stage-row';
 
       var input = document.createElement('input');
       input.className = 'stage-code';
@@ -555,7 +573,7 @@
           stageConfigs[idx].code = e.target.value;
         });
       })(i);
-      row.appendChild(input);
+      topRow.appendChild(input);
 
       var rngBtn = document.createElement('button');
       rngBtn.className = 'stage-btn';
@@ -568,33 +586,66 @@
           inp.value = code;
         });
       })(i, input);
-      row.appendChild(rngBtn);
+      topRow.appendChild(rngBtn);
 
-      var dirBtn = document.createElement('button');
-      dirBtn.className = 'stage-btn';
-      dirBtn.type = 'button';
-      dirBtn.textContent = stageConfigs[i].reversed ? 'REV' : 'FWD';
-      (function (idx, btn) {
-        btn.addEventListener('click', function () {
-          stageConfigs[idx].reversed = !stageConfigs[idx].reversed;
-          btn.textContent = stageConfigs[idx].reversed ? 'REV' : 'FWD';
+      content.appendChild(topRow);
+
+      var bottomRow = document.createElement('div');
+      bottomRow.className = 'stage-options';
+
+      var dirSeg = document.createElement('div');
+      dirSeg.className = 'seg-control seg-control-sm';
+      var dirFwd = document.createElement('button');
+      dirFwd.type = 'button';
+      dirFwd.className = 'seg-option' + (stageConfigs[i].reversed ? '' : ' selected');
+      dirFwd.dataset.val = 'FWD';
+      dirFwd.textContent = 'FWD';
+      var dirRev = document.createElement('button');
+      dirRev.type = 'button';
+      dirRev.className = 'seg-option' + (stageConfigs[i].reversed ? ' selected' : '');
+      dirRev.dataset.val = 'REV';
+      dirRev.textContent = 'REV';
+      dirSeg.appendChild(dirFwd);
+      dirSeg.appendChild(dirRev);
+      (function (idx, seg) {
+        seg.addEventListener('click', function (e) {
+          var btn = e.target.closest('.seg-option');
+          if (!btn || btn.classList.contains('selected')) return;
+          seg.querySelector('.selected').classList.remove('selected');
+          btn.classList.add('selected');
+          stageConfigs[idx].reversed = btn.dataset.val === 'REV';
         });
-      })(i, dirBtn);
-      row.appendChild(dirBtn);
+      })(i, dirSeg);
+      bottomRow.appendChild(dirSeg);
 
-      var modeBtn = document.createElement('button');
-      modeBtn.className = 'stage-btn';
-      modeBtn.type = 'button';
-      modeBtn.textContent = stageConfigs[i].nightMode ? '\u263E' : '\u2600';
-      (function (idx, btn) {
-        btn.addEventListener('click', function () {
-          stageConfigs[idx].nightMode = !stageConfigs[idx].nightMode;
-          btn.textContent = stageConfigs[idx].nightMode ? '\u263E' : '\u2600';
+      var modeSeg = document.createElement('div');
+      modeSeg.className = 'seg-control seg-control-sm';
+      var modeDay = document.createElement('button');
+      modeDay.type = 'button';
+      modeDay.className = 'seg-option' + (stageConfigs[i].nightMode ? '' : ' selected');
+      modeDay.dataset.val = 'DAY';
+      modeDay.textContent = 'DAY';
+      var modeNight = document.createElement('button');
+      modeNight.type = 'button';
+      modeNight.className = 'seg-option' + (stageConfigs[i].nightMode ? ' selected' : '');
+      modeNight.dataset.val = 'NIGHT';
+      modeNight.textContent = 'NIGHT';
+      modeSeg.appendChild(modeDay);
+      modeSeg.appendChild(modeNight);
+      (function (idx, seg) {
+        seg.addEventListener('click', function (e) {
+          var btn = e.target.closest('.seg-option');
+          if (!btn || btn.classList.contains('selected')) return;
+          seg.querySelector('.selected').classList.remove('selected');
+          btn.classList.add('selected');
+          stageConfigs[idx].nightMode = btn.dataset.val === 'NIGHT';
         });
-      })(i, modeBtn);
-      row.appendChild(modeBtn);
+      })(i, modeSeg);
+      bottomRow.appendChild(modeSeg);
 
-      stageListEl.appendChild(row);
+      content.appendChild(bottomRow);
+      block.appendChild(content);
+      stageListEl.appendChild(block);
     }
   }
 
@@ -617,9 +668,14 @@
           if (seriesMode && currentStageIndex < stageCount - 1) {
             advanceToNextStage();
           } else {
-            restartRace();
+            restartCurrentMap();
           }
         }
+      }
+
+      if (e.code === 'Escape' && gameState === 'finished') {
+        e.preventDefault();
+        restartRace();
       }
 
       if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
@@ -632,7 +688,7 @@
           if (seriesMode && currentStageIndex < stageCount - 1) {
             advanceToNextStage();
           } else {
-            restartRace();
+            restartCurrentMap();
           }
         }
       }
@@ -673,23 +729,42 @@
       }
     });
 
-    dirToggleBtn.addEventListener('click', function () {
-      reversed = !reversed;
+    copyTrackBtn.addEventListener('click', function () {
+      navigator.clipboard.writeText(currentTrackCode).then(function () {
+        copyTrackBtn.textContent = '\u2713';
+        setTimeout(function () { copyTrackBtn.innerHTML = '&#9112;'; }, 1500);
+      });
+    });
+
+    dirToggleBtn.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      dirToggleBtn.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      reversed = btn.dataset.val === 'REV';
       dirValueEl.textContent = reversed ? 'REV' : 'FWD';
       if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
     });
 
-    modeToggleBtn.addEventListener('click', function () {
-      nightMode = !nightMode;
+    modeToggleBtn.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      modeToggleBtn.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      nightMode = btn.dataset.val === 'NIGHT';
       modeValueEl.textContent = nightMode ? 'NIGHT' : 'DAY';
-      modeToggleBtn.innerHTML = nightMode ? '&#9790;' : '&#9788;';
     });
 
-    raceTypeBtn.addEventListener('click', function () {
-      seriesMode = !seriesMode;
+    raceTypeBtn.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      raceTypeBtn.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      seriesMode = btn.dataset.val === 'SERIES';
       raceTypeValue.textContent = seriesMode ? 'SERIES' : 'SINGLE';
       singleConfigEl.style.display = seriesMode ? 'none' : '';
       seriesConfigEl.style.display = seriesMode ? '' : 'none';
+      lapsLabel.textContent = seriesMode ? 'LAPS PER STAGE' : 'LAPS';
       if (seriesMode) buildStageList();
       if (!seriesMode && gameState === 'menu') rebuildTrack(trackCodeInput.value);
     });
@@ -716,6 +791,8 @@
         stageConfigs[i].reversed = Math.random() > 0.5;
         stageConfigs[i].nightMode = Math.random() > 0.5;
       }
+      totalLaps = Math.floor(Math.random() * 5) + 1;
+      lapsValueEl.textContent = totalLaps;
       buildStageList();
     });
   }
@@ -734,8 +811,16 @@
   function addLapTimeToHUD(lapNum, lapTime) {
     var div = document.createElement('div');
     div.className = 'hud-box';
-    div.style.marginTop = '4px';
-    div.textContent = 'L' + lapNum + '  ' + formatTime(lapTime);
+    div.style.marginTop = '8px';
+    var text = 'L' + lapNum + '  ' + formatTime(lapTime);
+    if (lapNum > 1) {
+      var prevTime = player.lapTimes[lapNum - 2];
+      var delta = lapTime - prevTime;
+      var sign = delta >= 0 ? '+' : '-';
+      text += '  ' + sign + formatTime(Math.abs(delta));
+      div.style.color = delta <= 0 ? '#4ecdc4' : '#e84d4d';
+    }
+    div.textContent = text;
     lapTimesList.appendChild(div);
   }
 
@@ -766,28 +851,39 @@
     gameState = 'countdown';
     overlay.classList.add('hidden');
     hud.style.display = 'block';
+    updateHUD();
+    for (var i = 0; i < semLights.length; i++) {
+      semLights[i].className = 'sem-light';
+    }
     countdownEl.style.display = 'flex';
     countdownTimer = 0;
-    countdownValue = 3;
-    countdownEl.textContent = '3';
+    countdownValue = 0;
   }
 
   function updateCountdown(dt) {
     countdownTimer += dt;
-    var val = 3 - Math.floor(countdownTimer);
-    if (val !== countdownValue) {
-      countdownValue = val;
-      if (val > 0) {
-        countdownEl.textContent = val;
-      } else if (val === 0) {
-        countdownEl.textContent = 'GO!';
-        countdownEl.style.color = '#4ecdc4';
+    var lit = Math.floor(countdownTimer);
+    if (lit > 3) lit = 3;
+    if (lit !== countdownValue) {
+      countdownValue = lit;
+      if (lit <= 3) {
+        for (var i = 0; i < semLights.length; i++) {
+          if (i < lit) {
+            semLights[i].className = 'sem-light red';
+          }
+        }
       }
     }
-    if (countdownTimer >= 3.8) {
+    if (countdownTimer >= 3.0 && countdownTimer < 3.6) {
+      for (var i = 0; i < semLights.length; i++) {
+        if (semLights[i].classList.contains('red')) {
+          semLights[i].className = 'sem-light green';
+        }
+      }
+    }
+    if (countdownTimer >= 3.6) {
       gameState = 'racing';
       countdownEl.style.display = 'none';
-      countdownEl.style.color = '#fff';
       raceTimer = 0;
       recording = [{ x: player.x, z: player.z, a: player.angle }];
       recordAccum = 0;
@@ -827,7 +923,8 @@
         resultsH2.textContent = 'SERIES COMPLETE';
         var totalTime = 0;
         for (var s = 0; s < seriesResults.length; s++) totalTime += seriesResults[s].time;
-        resultsTrackCode.textContent = stageCount + ' stages \u00B7 ' + formatTime(totalTime);
+        resultsTrackText.textContent = stageCount + ' stages \u00B7 ' + formatTime(totalTime);
+        copyTrackBtn.style.display = 'none';
 
         for (var s = 0; s < seriesResults.length; s++) {
           var sr = seriesResults[s];
@@ -839,10 +936,11 @@
           if (sr.isNewBest) stageLi.className += ' lap-fastest';
           resultsList.appendChild(stageLi);
         }
-        promptEl.textContent = 'Press ENTER to play again';
+        promptEl.textContent = 'ENTER Retry  \u00B7  ESC Menu';
       } else {
         resultsH2.textContent = 'STAGE ' + (currentStageIndex + 1) + ' COMPLETE';
-        resultsTrackCode.textContent = currentTrackCode;
+        resultsTrackText.textContent = currentTrackCode;
+        copyTrackBtn.style.display = '';
 
         if (isNewBest) {
           var badge = document.createElement('p');
@@ -869,7 +967,8 @@
       }
     } else {
       resultsH2.textContent = 'RACE COMPLETE';
-      resultsTrackCode.textContent = 'Track: ' + currentTrackCode;
+      resultsTrackText.textContent = currentTrackCode;
+      copyTrackBtn.style.display = '';
 
       if (isNewBest) {
         var badge = document.createElement('p');
@@ -904,7 +1003,7 @@
         if (player.lapTimes[i] === fastestLap) lapLi.className += ' lap-fastest';
         resultsList.appendChild(lapLi);
       }
-      promptEl.textContent = 'Press ENTER to play again';
+      promptEl.textContent = 'ENTER Retry  \u00B7  ESC Menu';
     }
   }
 
@@ -923,11 +1022,12 @@
     gameState = 'countdown';
     overlay.classList.add('hidden');
     hud.style.display = 'block';
+    for (var i = 0; i < semLights.length; i++) {
+      semLights[i].className = 'sem-light';
+    }
     countdownEl.style.display = 'flex';
-    countdownEl.style.color = '#fff';
     countdownTimer = 0;
-    countdownValue = 3;
-    countdownEl.textContent = '3';
+    countdownValue = 0;
     raceTimer = 0;
     recording = [];
     recordAccum = 0;
