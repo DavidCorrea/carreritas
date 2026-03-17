@@ -23,17 +23,17 @@ There are no tests. The game logic (track generation from string, lap counting, 
 
 ## User accounts
 
-Currently all persistence is localStorage — ghost replays and best times are device-bound and anonymous. Adding user accounts (username/password with proper hashing) would enable cross-device persistence and leaderboards. Accounts should include a country field so rankings can be filtered by country or viewed worldwide. Needs a backend and database, which the project doesn't have yet.
+Currently all persistence is localStorage — ghost replays and best times are device-bound and anonymous. Adding user accounts (username/password with proper hashing) would enable cross-device persistence and leaderboards. Accounts should include a country field so rankings can be filtered by country or viewed worldwide. Users should be able to add other users as friends via search or username. Users should also be able to pick their car color, stored in their profile. Needs a backend and database, which the project doesn't have yet.
 
 **Where:** project-wide (new backend required)
-**Why it matters:** Prerequisite for any social or competitive feature (challenges, leaderboards, medals, country rankings).
+**Why it matters:** Prerequisite for any social or competitive feature (challenges, leaderboards, medals, country rankings, friend invites). Car color adds personalization.
 
 ## Daily and weekly challenges
 
-Curated or procedurally-generated challenge tracks that rotate on a schedule — a daily track (resets every 24h) and a weekly track (resets every 7 days). All players race the same track code, laps, direction, and mode. Requires user accounts to record and compare times.
+Fully automated challenge lifecycle. A scheduled job generates the challenge config (track code, laps, direction, mode) using seeded RNG — daily at midnight UTC, weekly on Monday midnight UTC. While active, players can retry as many times as they want — only their best time counts. When the window closes, the job finalizes results: ranks all submissions, assigns gold/silver/bronze based on medal thresholds, updates user medal counts and rankings, then archives the challenge. No manual curation needed — the system runs itself.
 
-**Where:** new feature (needs backend for challenge generation, scheduling, and result storage)
-**Why it matters:** Gives players a reason to come back regularly and compete on equal footing.
+**Where:** new feature (needs backend for challenge generation, scheduling, result storage, and finalization job)
+**Why it matters:** Gives players a reason to come back regularly. Fully automated means zero operational overhead once deployed.
 
 ## Medal system
 
@@ -44,10 +44,10 @@ Award gold, silver, and bronze medals based on race times. Thresholds could be a
 
 ## Custom shared series
 
-Let users create a series (track codes, directions, modes, laps) and generate a shareable link. Friends open the link, race the same series, and times are compared on a shared leaderboard for that series. The series config could be encoded in the URL (no backend needed for the config itself) but recording and comparing results across players requires user accounts and a backend.
+Let users create a series (track codes, directions, modes, laps) and share it two ways: a public link anyone can open, or a direct invite to friends from their friend list. Friends race the same series and times are compared on a shared leaderboard for that series. The series config could be encoded in the URL (no backend needed for the config itself) but recording and comparing results across players requires user accounts and a backend.
 
-**Where:** new feature (series config encoding could be client-side; leaderboard needs backend + user accounts)
-**Why it matters:** Turns the game into a social experience — players can challenge friends on courses they designed.
+**Where:** new feature (series config encoding could be client-side; leaderboard and invites need backend + user accounts + friend system)
+**Why it matters:** Turns the game into a social experience — players can challenge friends on courses they designed, either casually via link or directly via invite.
 
 ## Global rankings
 
