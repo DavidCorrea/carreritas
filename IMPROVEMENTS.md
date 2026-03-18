@@ -16,7 +16,7 @@ There are no tests. The game logic (track generation from string, lap counting, 
 
 ## User account extensions
 
-Basic user accounts exist (username/password with bcrypt + JWT, cross-device persistence for settings and best times). Remaining features: a country field so rankings can be filtered by country or viewed worldwide, a friend system (add other users by search or username), and car color stored in the profile so friend ghosts render in the player's chosen colors.
+Basic user accounts exist (username/password with bcrypt + JWT, cross-device settings sync, optional country on registration). Remaining features: country-based filtering on leaderboards, a friend system (add other users by search or username), and car color stored in the profile so friend ghosts render in the player's chosen colors.
 
 **Where:** `api/`, `game.js`, future schema additions
 **Why it matters:** Prerequisite for social features (country rankings, friend invites, personalized friend ghosts).

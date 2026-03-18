@@ -78,7 +78,7 @@ A panel that lists all personal best times stored in localStorage. Each entry sh
 
 ## User Account
 
-Optional username + password authentication. Stored in Postgres (Neon). Passwords are bcrypt-hashed. Authentication uses JWT tokens stored in localStorage. Logging in uploads car settings to the server. Logging in on a new device downloads remote car settings. The game works fully without an account — all features remain available via localStorage.
+Optional username + password authentication with a required country (ISO 3166-1 alpha-2 code, selected during registration). Stored in Postgres (Neon). Passwords are bcrypt-hashed. Authentication uses JWT tokens stored in localStorage. Logging in uploads car settings to the server. Logging in on a new device downloads remote car settings. Country code is displayed in the account bar and leaderboard entries. The game works fully without an account — all features remain available via localStorage.
 
 ## Leaderboard
 
