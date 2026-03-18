@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10",
+    "bcryptjs": "^2.4",
+    "jsonwebtoken": "^9.0",
+    "pg": "^8.20.0"
+  }
+}
