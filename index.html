@@ -358,8 +358,11 @@
       font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
     }
 
-    #records-btn {
-      font-size: 12px; padding: 8px 20px; margin-top: 20px;
+    .menu-actions {
+      display: flex; gap: 10px; margin-top: 20px;
+    }
+    #records-btn, #settings-btn {
+      font-size: 12px; padding: 8px 20px;
       letter-spacing: 3px;
     }
 
@@ -457,6 +460,87 @@
       font-family: "SF Mono", Monaco, "Courier New", monospace;
       font-size: 14px; margin-top: 40px;
     }
+
+    #settings {
+      position: absolute; left: 0; right: 0; top: 0;
+      display: flex; flex-direction: column; align-items: center;
+      background: rgba(0, 0, 0, 0.7);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      transition: opacity 0.3s;
+      z-index: 30;
+      padding: 12px 24px;
+      gap: 8px;
+    }
+    #settings.hidden { opacity: 0; pointer-events: none; }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: auto min-content min-content min-content min-content;
+      column-gap: 20px;
+      row-gap: 6px;
+      align-items: center;
+      justify-content: center;
+    }
+    .settings-section {
+      display: flex; flex-direction: column; align-items: center;
+      white-space: nowrap;
+    }
+    .settings-section > .track-label:first-child { margin-top: 0; }
+    .settings-controls {
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px;
+      grid-column: 1 / -1;
+    }
+    .color-row {
+      display: flex; gap: 32px; margin-top: 10px;
+      align-items: center; justify-content: center;
+    }
+    .color-group {
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .color-group .track-label { margin-top: 0; }
+    .color-picker-wrap {
+      position: relative; width: 44px; height: 44px; margin-top: 8px;
+      border-radius: 50%; overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .color-picker-wrap:hover { border-color: #4ecdc4; }
+    .color-picker-wrap input[type="color"] {
+      position: absolute; inset: -8px;
+      width: calc(100% + 16px); height: calc(100% + 16px);
+      border: none; cursor: pointer;
+      background: none;
+    }
+    .pattern-options {
+      display: flex; gap: 10px; margin-top: 10px;
+    }
+    .pattern-btn {
+      width: 48px; height: 48px;
+      border-radius: 50% !important;
+      padding: 0 !important;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .pattern-btn.selected {
+      border-color: #4ecdc4 !important;
+      box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.3);
+    }
+    .pattern-btn canvas {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+    }
+    .underglow-slider {
+      -webkit-appearance: none; appearance: none;
+      width: 80px; height: 4px; margin-top: 10px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 2px; outline: none;
+    }
+    .underglow-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #4ecdc4; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -530,7 +614,10 @@
       </div>
     </div>
     <p class="start-prompt">Press ENTER to start</p>
-    <button id="records-btn" type="button">BEST RUNS</button>
+    <div class="menu-actions">
+      <button id="records-btn" type="button">BEST RUNS</button>
+      <button id="settings-btn" type="button">CAR SETTINGS</button>
+    </div>
     <a href="https://github.com/DavidCorrea/carreritas" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
 
@@ -552,6 +639,56 @@
     <div id="records-list"></div>
     <p class="start-prompt" id="records-back" style="font-size: 14px; margin-top: 32px; cursor: pointer;">ESC Back</p>
   </div>
+
+  <div id="settings" class="hidden">
+    <div class="settings-grid">
+      <div class="settings-section">
+        <p class="track-label">PATTERN</p>
+        <div class="pattern-options" id="pattern-options"></div>
+      </div>
+      <div class="settings-section">
+        <p class="track-label">PRIMARY</p>
+        <div class="color-picker-wrap">
+          <input type="color" id="color-primary" value="#e84d4d">
+        </div>
+      </div>
+      <div class="settings-section">
+        <p class="track-label">SECONDARY</p>
+        <div class="color-picker-wrap">
+          <input type="color" id="color-secondary" value="#ffffff">
+        </div>
+      </div>
+      <div class="settings-section">
+        <p class="track-label">HEADLIGHTS</p>
+        <div class="color-picker-wrap">
+          <input type="color" id="color-headlights" value="#ffe0a0">
+        </div>
+      </div>
+      <div class="settings-section">
+        <p class="track-label">UNDERGLOW</p>
+        <div class="color-picker-wrap">
+          <input type="color" id="color-underglow" value="#ff00ff">
+        </div>
+      </div>
+      <div style="grid-column:4; display:flex; flex-direction:column; align-items:center;">
+        <p class="track-label" id="headlight-shape-label" style="margin-top:0;">SHAPE</p>
+        <input type="range" id="headlight-shape" min="0" max="100" value="50" class="underglow-slider" style="margin-top:8px;">
+      </div>
+      <div style="grid-column:5; display:flex; flex-direction:column; align-items:center;">
+        <p class="track-label" id="underglow-opacity-label" style="margin-top:0;">100%</p>
+        <input type="range" id="underglow-opacity" min="0" max="100" value="100" class="underglow-slider" style="margin-top:8px;">
+      </div>
+      <!-- Row 3: preview controls -->
+      <div class="settings-controls">
+        <div class="seg-control" id="preview-mode-toggle">
+          <button type="button" class="seg-option selected" data-val="DAY">DAY</button>
+          <button type="button" class="seg-option" data-val="NIGHT">NIGHT</button>
+        </div>
+        <div class="seg-control" id="preview-camera-toggle"></div>
+      </div>
+    </div>
+  </div>
+  <p class="start-prompt" id="settings-back" style="position:absolute; top:16px; right:24px; font-size:14px; cursor:pointer; margin:0; z-index:31; display:none;">ESC Back</p>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
   <script src="game.js"></script>

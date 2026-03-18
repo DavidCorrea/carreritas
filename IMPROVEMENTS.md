@@ -113,6 +113,13 @@ At 3,000 users this architecture keeps the database small (challenge times are ~
 **Where:** architectural decision (affects backend schema and sync logic)
 **Why it matters:** Trying to store everything server-side creates an unbounded storage problem. Splitting by competitive/social vs. personal keeps costs predictable.
 
+## Car settings sync with user accounts
+
+Car customization (pattern, colors, headlight shape, underglow) is currently localStorage-only. Once user accounts exist, these settings should sync to the profile so they persist across devices. The ghost car currently uses a hardcoded blue — friend ghosts could render in the friend's chosen car colors.
+
+**Where:** `game.js` car settings, future backend profile
+**Why it matters:** Car identity is lost on device switch. Friend ghosts all looking identical (blue) misses an opportunity to make them recognizable.
+
 ## Ghost replay compression — reduce sample rate
 
 Ghost replays already use delta encoding, quantization (positions ×10, angles ×100), and flat packed arrays — dropping timestamps and JSON overhead. The remaining optimization is reducing the sample rate from 10/sec (`RECORD_INTERVAL = 0.1`) to 5/sec (200ms). This would halve frame count with negligible visual impact on interpolation.

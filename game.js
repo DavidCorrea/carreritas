@@ -30,8 +30,47 @@
   var currentStageIndex = 0;
   var seriesResults = [];
 
-  var PLAYER_COLOR = 0xe84d4d;
   var GHOST_COLOR = 0x4da6e8;
+  var SETTINGS_KEY = 'carreritas_settings';
+  var DEFAULT_SETTINGS = {
+    pattern: 'solid',
+    primaryColor: '#e84d4d',
+    secondaryColor: '#ffffff',
+    headlightsColor: '#ffe0a0',
+    headlightShape: 50,
+    underglowColor: '#ff00ff',
+    underglowOpacity: 100
+  };
+  var carSettings = loadSettings();
+
+  function loadSettings() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+      if (saved) {
+        var s = {};
+        for (var k in DEFAULT_SETTINGS) s[k] = saved[k] !== undefined ? saved[k] : DEFAULT_SETTINGS[k];
+        return s;
+      }
+    } catch (_) {}
+    return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  }
+
+  function saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(carSettings));
+  }
+
+  function hexToInt(hex) {
+    return parseInt(hex.replace('#', ''), 16);
+  }
+
+  function hexToRgb(hex) {
+    var n = hexToInt(hex);
+    return { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 };
+  }
+
+  function intToHex(n) {
+    return '#' + ('000000' + n.toString(16)).slice(-6);
+  }
 
   var scene, camera, renderer;
   var orthoCamera, perspCamera;
@@ -42,6 +81,7 @@
   var keys = {};
   var ambientLight, carPointLight;
   var beamMeshL, beamMeshR, glowMesh, tailMesh;
+  var underglowMesh, underglowLight;
   var centerLineMat;
   var gameState = 'menu';
   var recordsVisible = false;
@@ -97,6 +137,23 @@
   var recordsListEl = document.getElementById('records-list');
   var recordsBtn = document.getElementById('records-btn');
   var recordsBackEl = document.getElementById('records-back');
+  var settingsEl = document.getElementById('settings');
+  var settingsBtn = document.getElementById('settings-btn');
+  var settingsBackEl = document.getElementById('settings-back');
+  var colorPrimaryEl = document.getElementById('color-primary');
+  var colorSecondaryEl = document.getElementById('color-secondary');
+  var colorHeadlightsEl = document.getElementById('color-headlights');
+  var headlightShapeEl = document.getElementById('headlight-shape');
+  var headlightShapeLabel = document.getElementById('headlight-shape-label');
+  var colorUnderglowEl = document.getElementById('color-underglow');
+  var underglowOpacityEl = document.getElementById('underglow-opacity');
+  var underglowOpacityLabel = document.getElementById('underglow-opacity-label');
+  var patternOptionsEl = document.getElementById('pattern-options');
+  var previewModeToggle = document.getElementById('preview-mode-toggle');
+  var previewCameraToggle = document.getElementById('preview-camera-toggle');
+  var settingsVisible = false;
+  var previewNightMode = false;
+  var savedNightMode = false;
 
   // ── Persistence (per track code) ──────────────────────────────────
   function storageKey(code) {
@@ -425,21 +482,164 @@
   }
 
   // ── Car mesh creation ─────────────────────────────────────────────
-  function createCarMesh(color, x, z, angle, opacity) {
+  var PATTERNS = ['solid', 'ring', 'half', 'stripe', 'gradient', 'radial', 'spiral', 'dots', 'bullseye'];
+
+  function createCarMesh(opts) {
     var group = new THREE.Group();
-    var transparent = opacity < 1;
+    var transparent = opts.opacity < 1;
+    var primary = opts.color;
+    var secondary = opts.secondaryColor || primary;
+    var pattern = opts.pattern || 'solid';
+    var matOpts = { transparent: transparent, opacity: opts.opacity };
 
-    var disc = new THREE.Mesh(
-      new THREE.CircleGeometry(CAR_RADIUS, 20),
-      new THREE.MeshLambertMaterial({ color: color, transparent: transparent, opacity: opacity })
-    );
-    disc.rotation.x = -Math.PI / 2;
-    disc.position.y = 2;
-    group.add(disc);
+    if (pattern === 'half') {
+      var halfA = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS, 20, 0, Math.PI),
+        new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      );
+      halfA.rotation.x = -Math.PI / 2;
+      halfA.position.y = 2;
+      group.add(halfA);
 
+      var halfB = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS, 20, Math.PI, Math.PI),
+        new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+      );
+      halfB.rotation.x = -Math.PI / 2;
+      halfB.position.y = 2;
+      group.add(halfB);
+    } else if (pattern === 'gradient' || pattern === 'radial') {
+      var aSegs = 32;
+      var rSegs = 10;
+      var pRgb = hexToRgb(intToHex(primary));
+      var sRgb = hexToRgb(intToHex(secondary));
+      var gPositions = [];
+      var gColors = [];
+      var gIndices = [];
+
+      for (var ri = 0; ri <= rSegs; ri++) {
+        var rFrac = ri / rSegs;
+        var rad = rFrac * CAR_RADIUS;
+        for (var ai = 0; ai <= aSegs; ai++) {
+          var ang = (ai / aSegs) * Math.PI * 2;
+          var px = Math.cos(ang) * rad;
+          var py = Math.sin(ang) * rad;
+          gPositions.push(px, py, 0);
+          var t;
+          if (pattern === 'gradient') {
+            t = (py / CAR_RADIUS + 1) * 0.5;
+          } else {
+            t = 1 - rFrac;
+          }
+          gColors.push(pRgb.r * t + sRgb.r * (1 - t));
+          gColors.push(pRgb.g * t + sRgb.g * (1 - t));
+          gColors.push(pRgb.b * t + sRgb.b * (1 - t));
+        }
+      }
+
+      var stride = aSegs + 1;
+      for (var ri = 0; ri < rSegs; ri++) {
+        for (var ai = 0; ai < aSegs; ai++) {
+          var a = ri * stride + ai;
+          var b = a + 1;
+          var c = a + stride;
+          var d = c + 1;
+          gIndices.push(a, c, b, b, c, d);
+        }
+      }
+
+      var geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(gPositions, 3));
+      geom.setAttribute('color', new THREE.Float32BufferAttribute(gColors, 3));
+      geom.setIndex(gIndices);
+      geom.computeVertexNormals();
+      var gDisc = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({
+        vertexColors: true, transparent: transparent, opacity: opts.opacity
+      }));
+      gDisc.rotation.x = -Math.PI / 2;
+      gDisc.position.y = 2;
+      group.add(gDisc);
+    } else if (pattern === 'spiral') {
+      var blades = 6;
+      var sliceAngle = (Math.PI * 2) / blades;
+      for (var si = 0; si < blades; si++) {
+        var sliceColor = si % 2 === 0 ? primary : secondary;
+        var slice = new THREE.Mesh(
+          new THREE.CircleGeometry(CAR_RADIUS, 8, si * sliceAngle, sliceAngle),
+          new THREE.MeshLambertMaterial(Object.assign({ color: sliceColor }, matOpts))
+        );
+        slice.rotation.x = -Math.PI / 2;
+        slice.position.y = 2;
+        group.add(slice);
+      }
+    } else if (pattern === 'dots') {
+      var dotsDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS, 20),
+        new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      );
+      dotsDisc.rotation.x = -Math.PI / 2;
+      dotsDisc.position.y = 2;
+      group.add(dotsDisc);
+      var dotAngles = [0.4, 1.4, 2.5, 3.7, 5.0];
+      var dotDist = CAR_RADIUS * 0.55;
+      var dotR = CAR_RADIUS * 0.17;
+      for (var di = 0; di < dotAngles.length; di++) {
+        var da = dotAngles[di];
+        var dMesh = new THREE.Mesh(
+          new THREE.CircleGeometry(dotR, 10),
+          new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+        );
+        dMesh.rotation.x = -Math.PI / 2;
+        dMesh.position.set(Math.sin(da) * dotDist, 2.15, Math.cos(da) * dotDist);
+        group.add(dMesh);
+      }
+    } else if (pattern === 'bullseye') {
+      var beDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS, 20),
+        new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      );
+      beDisc.rotation.x = -Math.PI / 2;
+      beDisc.position.y = 2;
+      group.add(beDisc);
+      var beRing = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS * 0.65, 16),
+        new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+      );
+      beRing.rotation.x = -Math.PI / 2;
+      beRing.position.y = 2.1;
+      group.add(beRing);
+      var beCenter = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS * 0.35, 12),
+        new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      );
+      beCenter.rotation.x = -Math.PI / 2;
+      beCenter.position.y = 2.15;
+      group.add(beCenter);
+    } else {
+      var disc = new THREE.Mesh(
+        new THREE.CircleGeometry(CAR_RADIUS, 20),
+        new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 2;
+      group.add(disc);
+    }
+
+    if (pattern === 'stripe') {
+      var stripe = new THREE.Mesh(
+        new THREE.PlaneGeometry(CAR_RADIUS * 2, CAR_RADIUS * 0.35),
+        new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+      );
+      stripe.rotation.x = -Math.PI / 2;
+      stripe.position.y = 2.15;
+      group.add(stripe);
+    }
+
+    var ringColor = pattern === 'ring' ? secondary : 0x000000;
+    var ringOpacity = pattern === 'ring' ? 0.8 * opts.opacity : 0.3 * opts.opacity;
     var ring = new THREE.Mesh(
       new THREE.RingGeometry(CAR_RADIUS * 0.82, CAR_RADIUS, 20),
-      new THREE.MeshLambertMaterial({ color: 0x000000, transparent: true, opacity: 0.3 * opacity })
+      new THREE.MeshLambertMaterial({ color: ringColor, transparent: true, opacity: ringOpacity })
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 2.1;
@@ -447,7 +647,7 @@
 
     var dot = new THREE.Mesh(
       new THREE.CircleGeometry(CAR_RADIUS * 0.22, 12),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: transparent, opacity: opacity })
+      new THREE.MeshLambertMaterial(Object.assign({ color: 0xffffff }, matOpts))
     );
     dot.rotation.x = -Math.PI / 2;
     dot.position.set(0, 2.5, CAR_RADIUS * 0.55);
@@ -463,8 +663,8 @@
       group.add(shadow);
     }
 
-    group.position.set(x, 0, z);
-    group.rotation.y = angle;
+    group.position.set(opts.x, 0, opts.z);
+    group.rotation.y = opts.angle;
     scene.add(group);
     return group;
   }
@@ -539,7 +739,12 @@
   // ── Player ────────────────────────────────────────────────────────
   function createPlayer() {
     var start = getStartPosition();
-    var mesh = createCarMesh(PLAYER_COLOR, start.x, start.z, start.angle, 1);
+    var mesh = createCarMesh({
+      color: hexToInt(carSettings.primaryColor),
+      secondaryColor: hexToInt(carSettings.secondaryColor),
+      pattern: carSettings.pattern,
+      x: start.x, z: start.z, angle: start.angle, opacity: 1
+    });
     player = {
       mesh: mesh, x: start.x, z: start.z, angle: start.angle,
       vx: 0, vz: 0, speed: 0,
@@ -556,7 +761,9 @@
     if (ghostMesh) { scene.remove(ghostMesh); ghostMesh = null; }
     if (!bestReplay) return;
     var start = getStartPosition();
-    ghostMesh = createCarMesh(GHOST_COLOR, start.x, start.z, start.angle, 0.35);
+    ghostMesh = createCarMesh({
+      color: GHOST_COLOR, x: start.x, z: start.z, angle: start.angle, opacity: 0.35
+    });
     ghostMesh.traverse(function (child) {
       if (child.isMesh && child.material.type === 'MeshLambertMaterial') {
         var m = child.material;
@@ -839,7 +1046,7 @@
 
       if (e.code === 'Enter') {
         e.preventDefault();
-        if (gameState === 'menu' && !recordsVisible) {
+        if (gameState === 'menu' && !recordsVisible && !settingsVisible) {
           startCountdown();
         } else if (gameState === 'finished') {
           if (seriesMode && currentStageIndex < stageCount - 1) {
@@ -852,7 +1059,9 @@
 
       if (e.code === 'Escape') {
         e.preventDefault();
-        if (recordsVisible) {
+        if (settingsVisible) {
+          hideSettings();
+        } else if (recordsVisible) {
           hideRecords();
         } else if (gameState === 'finished') {
           restartRace();
@@ -861,7 +1070,7 @@
 
       if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
-        if (gameState === 'menu' && !recordsVisible) {
+        if (gameState === 'menu' && !recordsVisible && !settingsVisible) {
           startCountdown();
         } else if (gameState === 'racing' || gameState === 'countdown') {
           restartCurrentMap();
@@ -1018,6 +1227,84 @@
 
     recordsBackEl.addEventListener('click', function () {
       hideRecords();
+    });
+
+    settingsBtn.addEventListener('click', function () {
+      if (gameState === 'menu') showSettings();
+    });
+
+    settingsBackEl.addEventListener('click', function () {
+      hideSettings();
+    });
+
+    patternOptionsEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('.pattern-btn');
+      if (!btn) return;
+      var sel = patternOptionsEl.querySelector('.selected');
+      if (sel) sel.classList.remove('selected');
+      btn.classList.add('selected');
+      carSettings.pattern = btn.dataset.pattern;
+      saveSettings();
+      applyCarSettings();
+    });
+
+    colorPrimaryEl.addEventListener('input', function () {
+      carSettings.primaryColor = colorPrimaryEl.value;
+      saveSettings();
+      updatePatternPreviews();
+      applyCarSettings();
+    });
+
+    colorSecondaryEl.addEventListener('input', function () {
+      carSettings.secondaryColor = colorSecondaryEl.value;
+      saveSettings();
+      updatePatternPreviews();
+      applyCarSettings();
+    });
+
+    colorHeadlightsEl.addEventListener('input', function () {
+      carSettings.headlightsColor = colorHeadlightsEl.value;
+      saveSettings();
+      switchPreviewToNight();
+      rebuildLightMeshes();
+    });
+
+    headlightShapeEl.addEventListener('input', function () {
+      carSettings.headlightShape = parseInt(headlightShapeEl.value);
+      saveSettings();
+      switchPreviewToNight();
+      rebuildLightMeshes();
+    });
+
+    colorUnderglowEl.addEventListener('input', function () {
+      carSettings.underglowColor = colorUnderglowEl.value;
+      saveSettings();
+      rebuildLightMeshes();
+    });
+
+    underglowOpacityEl.addEventListener('input', function () {
+      carSettings.underglowOpacity = parseInt(underglowOpacityEl.value);
+      underglowOpacityLabel.textContent = carSettings.underglowOpacity + '%';
+      saveSettings();
+      rebuildLightMeshes();
+    });
+
+    previewModeToggle.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      previewModeToggle.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      previewNightMode = btn.dataset.val === 'NIGHT';
+      nightMode = previewNightMode;
+    });
+
+    previewCameraToggle.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      previewCameraToggle.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      cameraModeIndex = parseInt(btn.dataset.val);
+      applyCameraMode();
     });
   }
 
@@ -1176,7 +1463,7 @@
         var li = document.createElement('li');
         li.className = 'player';
         li.textContent = 'TIME  ' + formatTime(player.finishTime);
-        li.style.color = '#' + PLAYER_COLOR.toString(16).padStart(6, '0');
+        li.style.color = carSettings.primaryColor;
         resultsList.appendChild(li);
 
         var fastestLap = Math.min.apply(null, player.lapTimes);
@@ -1204,7 +1491,7 @@
       var li = document.createElement('li');
       li.className = 'player';
       li.textContent = 'TIME  ' + formatTime(player.finishTime);
-      li.style.color = '#' + PLAYER_COLOR.toString(16).padStart(6, '0');
+      li.style.color = carSettings.primaryColor;
       resultsList.appendChild(li);
 
       var li2 = document.createElement('li');
@@ -1392,6 +1679,179 @@
     recordsVisible = false;
   }
 
+  // ── Settings ────────────────────────────────────────────────────────
+  function drawPatternPreview(canvas, pattern, primary, secondary) {
+    var ctx = canvas.getContext('2d');
+    var s = canvas.width;
+    var r = s / 2;
+    ctx.clearRect(0, 0, s, s);
+
+    ctx.beginPath();
+    ctx.arc(r, r, r, 0, Math.PI * 2);
+    ctx.fillStyle = primary;
+    ctx.fill();
+
+    if (pattern === 'ring') {
+      ctx.beginPath();
+      ctx.arc(r, r, r, 0, Math.PI * 2);
+      ctx.fillStyle = secondary;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.78, 0, Math.PI * 2);
+      ctx.fillStyle = primary;
+      ctx.fill();
+    } else if (pattern === 'half') {
+      ctx.beginPath();
+      ctx.arc(r, r, r, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fillStyle = secondary;
+      ctx.fill();
+    } else if (pattern === 'stripe') {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(r, r, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = secondary;
+      ctx.fillRect(0, r - r * 0.18, s, r * 0.36);
+      ctx.restore();
+    } else if (pattern === 'gradient') {
+      var grad = ctx.createLinearGradient(r, 0, r, s);
+      grad.addColorStop(0, primary);
+      grad.addColorStop(1, secondary);
+      ctx.beginPath();
+      ctx.arc(r, r, r, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    } else if (pattern === 'radial') {
+      var rGrad = ctx.createRadialGradient(r, r, 0, r, r, r);
+      rGrad.addColorStop(0, primary);
+      rGrad.addColorStop(1, secondary);
+      ctx.beginPath();
+      ctx.arc(r, r, r, 0, Math.PI * 2);
+      ctx.fillStyle = rGrad;
+      ctx.fill();
+    } else if (pattern === 'spiral') {
+      var blades = 6;
+      var sliceA = (Math.PI * 2) / blades;
+      for (var si = 0; si < blades; si++) {
+        ctx.beginPath();
+        ctx.moveTo(r, r);
+        ctx.arc(r, r, r, si * sliceA - Math.PI / 2, (si + 1) * sliceA - Math.PI / 2);
+        ctx.closePath();
+        ctx.fillStyle = si % 2 === 0 ? primary : secondary;
+        ctx.fill();
+      }
+    } else if (pattern === 'dots') {
+      var dotAngles = [0.4, 1.4, 2.5, 3.7, 5.0];
+      var dotDist = r * 0.55;
+      var dotR = r * 0.17;
+      for (var di = 0; di < dotAngles.length; di++) {
+        ctx.beginPath();
+        ctx.arc(r + Math.cos(dotAngles[di]) * dotDist, r + Math.sin(dotAngles[di]) * dotDist, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = secondary;
+        ctx.fill();
+      }
+    } else if (pattern === 'bullseye') {
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.65, 0, Math.PI * 2);
+      ctx.fillStyle = secondary;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = primary;
+      ctx.fill();
+    }
+  }
+
+  function buildPatternButtons() {
+    patternOptionsEl.innerHTML = '';
+    for (var i = 0; i < PATTERNS.length; i++) {
+      var p = PATTERNS[i];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pattern-btn' + (p === carSettings.pattern ? ' selected' : '');
+      btn.dataset.pattern = p;
+      var cvs = document.createElement('canvas');
+      cvs.width = 64;
+      cvs.height = 64;
+      drawPatternPreview(cvs, p, carSettings.primaryColor, carSettings.secondaryColor);
+      btn.appendChild(cvs);
+      patternOptionsEl.appendChild(btn);
+    }
+  }
+
+  function updatePatternPreviews() {
+    var buttons = patternOptionsEl.querySelectorAll('.pattern-btn');
+    for (var i = 0; i < buttons.length; i++) {
+      var cvs = buttons[i].querySelector('canvas');
+      drawPatternPreview(cvs, buttons[i].dataset.pattern, carSettings.primaryColor, carSettings.secondaryColor);
+    }
+  }
+
+  function applyCarSettings() {
+    if (!player) return;
+    scene.remove(player.mesh);
+    var mesh = createCarMesh({
+      color: hexToInt(carSettings.primaryColor),
+      secondaryColor: hexToInt(carSettings.secondaryColor),
+      pattern: carSettings.pattern,
+      x: player.x, z: player.z, angle: player.angle, opacity: 1
+    });
+    player.mesh = mesh;
+    rebuildLightMeshes();
+  }
+
+  function buildCameraToggle() {
+    previewCameraToggle.innerHTML = '';
+    for (var i = 0; i < CAMERA_MODES.length; i++) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'seg-option' + (i === cameraModeIndex ? ' selected' : '');
+      btn.dataset.val = String(i);
+      btn.textContent = CAMERA_MODES[i];
+      previewCameraToggle.appendChild(btn);
+    }
+  }
+
+  function showSettings() {
+    colorPrimaryEl.value = carSettings.primaryColor;
+    colorSecondaryEl.value = carSettings.secondaryColor;
+    colorHeadlightsEl.value = carSettings.headlightsColor;
+    headlightShapeEl.value = carSettings.headlightShape;
+    colorUnderglowEl.value = carSettings.underglowColor;
+    underglowOpacityEl.value = carSettings.underglowOpacity;
+    underglowOpacityLabel.textContent = carSettings.underglowOpacity + '%';
+    buildPatternButtons();
+    buildCameraToggle();
+
+    savedNightMode = nightMode;
+    previewNightMode = nightMode;
+    var sel = previewModeToggle.querySelector('.selected');
+    if (sel) sel.classList.remove('selected');
+    previewModeToggle.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+
+    overlay.classList.add('hidden');
+    settingsEl.classList.remove('hidden');
+    settingsBackEl.style.display = '';
+    settingsVisible = true;
+  }
+
+  function switchPreviewToNight() {
+    if (nightMode) return;
+    nightMode = true;
+    previewNightMode = true;
+    var sel = previewModeToggle.querySelector('.selected');
+    if (sel) sel.classList.remove('selected');
+    previewModeToggle.querySelector('[data-val="NIGHT"]').classList.add('selected');
+  }
+
+  function hideSettings() {
+    nightMode = savedNightMode;
+    settingsEl.classList.add('hidden');
+    settingsBackEl.style.display = 'none';
+    overlay.classList.remove('hidden');
+    settingsVisible = false;
+  }
+
   // ── Camera ────────────────────────────────────────────────────────
   function updateCamera() {
     var mode = CAMERA_MODES[cameraModeIndex];
@@ -1464,10 +1924,10 @@
   }
 
   // ── Night mode (3D) ──────────────────────────────────────────────
-  function createBeamMesh(length, halfAngle) {
+  function createBeamMesh(length, halfAngle, rgb) {
     var segments = 16;
     var positions = [0, 0.02, 0];
-    var colors = [0.9, 0.85, 0.5];
+    var colors = [rgb.r, rgb.g, rgb.b];
     var indices = [];
 
     for (var i = 0; i <= segments; i++) {
@@ -1523,23 +1983,101 @@
     }));
   }
 
+  function createUnderglowMesh(color) {
+    var group = new THREE.Group();
+    var segments = 40;
+    var rgb = hexToRgb(color);
+    var colorInt = hexToInt(color);
+    var fade = carSettings.underglowOpacity / 100;
+
+    var inner = new THREE.Mesh(
+      new THREE.CircleGeometry(CAR_RADIUS * 1.05, segments),
+      new THREE.MeshBasicMaterial({ color: colorInt, transparent: true, opacity: 0.45 * fade, depthWrite: false })
+    );
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.y = 0.04;
+    group.add(inner);
+
+    var edgeR = CAR_RADIUS * 0.9;
+    var outerR = CAR_RADIUS * 2.7;
+    var positions = [];
+    var colors = [];
+    var indices = [];
+    for (var i = 0; i <= segments; i++) {
+      var a = (i / segments) * Math.PI * 2;
+      var cx = Math.cos(a), cz = Math.sin(a);
+      positions.push(cx * edgeR, 0.05, cz * edgeR);
+      colors.push(rgb.r * 1.2 * fade, rgb.g * 1.2 * fade, rgb.b * 1.2 * fade);
+      positions.push(cx * outerR, 0.05, cz * outerR);
+      colors.push(0, 0, 0);
+    }
+    for (var i = 0; i < segments; i++) {
+      var b = i * 2;
+      indices.push(b, b + 1, b + 2, b + 2, b + 1, b + 3);
+    }
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geom.setIndex(indices);
+    group.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    })));
+
+    return group;
+  }
+
+  function headlightParams() {
+    var t = (carSettings.headlightShape != null ? carSettings.headlightShape : 50) / 100;
+    var length = 80 + (1 - t) * 100;
+    var halfAngle = 0.2 + t * 0.5;
+    return { length: length, halfAngle: halfAngle };
+  }
+
   function setupLights() {
     ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     scene.add(ambientLight);
 
+    var hlRgb = hexToRgb(carSettings.headlightsColor);
+    var hp = headlightParams();
     carPointLight = new THREE.PointLight(0xffe0a0, 0, 90, 2);
     scene.add(carPointLight);
 
-    beamMeshL = createBeamMesh(130, 0.45);
-    beamMeshR = createBeamMesh(130, 0.45);
-    glowMesh = createGlowMesh(35, 0.35, 0.28, 0.1);
+    beamMeshL = createBeamMesh(hp.length, hp.halfAngle, hlRgb);
+    beamMeshR = createBeamMesh(hp.length, hp.halfAngle, hlRgb);
+    glowMesh = createGlowMesh(35, hlRgb.r * 0.4, hlRgb.g * 0.3, hlRgb.b * 0.1);
     tailMesh = createGlowMesh(15, 0.15, 0.02, 0);
 
-    scene.add(beamMeshL, beamMeshR, glowMesh, tailMesh);
+    underglowMesh = createUnderglowMesh(carSettings.underglowColor);
+    underglowLight = new THREE.PointLight(hexToInt(carSettings.underglowColor), 0, 60, 2);
+
+    scene.add(beamMeshL, beamMeshR, glowMesh, tailMesh, underglowMesh, underglowLight);
     beamMeshL.visible = false;
     beamMeshR.visible = false;
     glowMesh.visible = false;
     tailMesh.visible = false;
+    underglowMesh.visible = false;
+  }
+
+  function rebuildLightMeshes() {
+    scene.remove(beamMeshL, beamMeshR, glowMesh, tailMesh, underglowMesh, underglowLight);
+
+    var hlRgb = hexToRgb(carSettings.headlightsColor);
+    var hp = headlightParams();
+
+    beamMeshL = createBeamMesh(hp.length, hp.halfAngle, hlRgb);
+    beamMeshR = createBeamMesh(hp.length, hp.halfAngle, hlRgb);
+    glowMesh = createGlowMesh(35, hlRgb.r * 0.4, hlRgb.g * 0.3, hlRgb.b * 0.1);
+    tailMesh = createGlowMesh(15, 0.15, 0.02, 0);
+
+    underglowMesh = createUnderglowMesh(carSettings.underglowColor);
+    underglowLight = new THREE.PointLight(hexToInt(carSettings.underglowColor), 0, 60, 2);
+
+    scene.add(beamMeshL, beamMeshR, glowMesh, tailMesh, underglowMesh, underglowLight);
+    beamMeshL.visible = false;
+    beamMeshR.visible = false;
+    glowMesh.visible = false;
+    tailMesh.visible = false;
+    underglowMesh.visible = false;
   }
 
   function updateNightMode() {
@@ -1550,16 +2088,25 @@
 
     carPointLight.intensity = isNight ? 0.8 : 0;
 
-    var showBeams = isNight && !!player;
+    var hasPlayer = !!player;
+    var showBeams = isNight && hasPlayer;
     beamMeshL.visible = showBeams;
     beamMeshR.visible = showBeams;
     glowMesh.visible = showBeams;
     tailMesh.visible = showBeams;
+    underglowMesh.visible = hasPlayer;
+    underglowLight.intensity = hasPlayer ? 2.5 * (carSettings.underglowOpacity / 100) : 0;
 
-    if (!showBeams) return;
+    if (!hasPlayer) return;
 
     var fx = Math.sin(player.angle);
     var fz = Math.cos(player.angle);
+
+    underglowMesh.position.set(player.x, 0, player.z);
+    underglowLight.position.set(player.x, 1.5, player.z);
+
+    if (!showBeams) return;
+
     var headlightFwd = CAR_RADIUS * 0.6;
 
     beamMeshL.position.set(player.x + fx * headlightFwd, 0, player.z + fz * headlightFwd);

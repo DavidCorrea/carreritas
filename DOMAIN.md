@@ -36,6 +36,19 @@ One race within a series. Configured independently for track code, direction, an
 
 A race configuration (track code, direction, mode, laps) deterministically generated from the current UTC date. The date string is hashed into a seed for a PRNG (mulberry32), so every player gets the exact same race on the same day — no backend needed.
 
+## Car Settings
+
+Player-configurable car appearance, persisted in localStorage. Includes:
+
+- **Pattern** — how primary and secondary colors are applied to the car body. Options: solid, ring, half, stripe, gradient, radial, spiral, dots, bullseye.
+- **Primary / Secondary Color** — two colors used by the selected pattern.
+- **Headlights Color** — affects the visible beam and glow meshes only, not the scene's ambient point light (which stays warm white).
+- **Headlight Shape** — a ratio between beam length and width. Low values produce long narrow beams; high values produce short wide beams.
+- **Underglow Color** — the color of the neon-style light under the car, visible as both a mesh and a point light casting onto the ground.
+- **Underglow Opacity** — controls underglow visibility from 0% (off) to 100% (full). Affects both the glow mesh and the point light intensity.
+
+Settings are previewed live on the current map. The settings UI includes a day/night toggle and camera mode selector for previewing.
+
 ## Best Runs (Records)
 
 A panel that lists all personal best times stored in localStorage. Each entry shows the track preview (SVG), track code, time, lap count, direction, mode, and date. Players can retry any record directly, which loads the track configuration and starts a countdown.
