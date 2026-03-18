@@ -4,7 +4,7 @@
 
 The game loads `three.min.js` from CDN at version 0.150.0. Three.js warns that `build/three.js` and `build/three.min.js` are deprecated as of r150 and will be removed in r160. The migration path is ES Modules.
 
-**Where:** `index.html` line 444 (script tag)
+**Where:** `index.html` line 975 (script tag)
 **Why it matters:** The CDN URL will stop working when Three.js removes the legacy build files.
 
 ## No test infrastructure
@@ -14,39 +14,39 @@ There are no tests. The game logic (track generation from string, lap counting, 
 **Where:** project-wide
 **Why it matters:** Any change to physics, lap tracking, or series flow could silently break behavior.
 
-## User accounts
+## User account extensions
 
-Currently all persistence is localStorage — ghost replays and best times are device-bound and anonymous. Adding user accounts (username/password with proper hashing) would enable cross-device persistence and leaderboards. Accounts should include a country field so rankings can be filtered by country or viewed worldwide. Users should be able to add other users as friends via search or username. Users should also be able to pick their car color, stored in their profile. Needs a backend and database, which the project doesn't have yet.
+Basic user accounts exist (username/password with bcrypt + JWT, cross-device persistence for settings and best times). Remaining features: a country field so rankings can be filtered by country or viewed worldwide, a friend system (add other users by search or username), and car color stored in the profile so friend ghosts render in the player's chosen colors.
 
-**Where:** project-wide (new backend required)
-**Why it matters:** Prerequisite for any social or competitive feature (challenges, leaderboards, medals, country rankings, friend invites). Car color adds personalization.
+**Where:** `api/`, `game.js`, future schema additions
+**Why it matters:** Prerequisite for social features (country rankings, friend invites, personalized friend ghosts).
 
-## Daily and weekly challenges
+## Challenge finalization and archiving
 
-Fully automated challenge lifecycle. A scheduled job generates the challenge config (track code, laps, direction, mode) using seeded RNG — daily at midnight UTC, weekly on Monday midnight UTC. While active, players can retry as many times as they want — only their best time counts. When the window closes, the job finalizes results: ranks all submissions, assigns gold/silver/bronze based on medal thresholds, updates user medal counts and rankings, then archives the challenge. No manual curation needed — the system runs itself.
+Daily and weekly challenge modes exist (client-side seeded PRNG, leaderboards, series challenge time storage). The remaining work is an automated lifecycle: a scheduled job that runs when each challenge window closes to finalize results — rank all submissions, assign medals (see "Medal system"), update user medal counts and rankings, then archive the challenge. Currently challenges just roll over when the date changes with no finalization step.
 
-**Where:** new feature (needs backend for challenge generation, scheduling, result storage, and finalization job)
-**Why it matters:** Gives players a reason to come back regularly. Fully automated means zero operational overhead once deployed.
+**Where:** new feature (needs backend scheduled job, challenge archive table)
+**Why it matters:** Without finalization, challenge results are ephemeral — there's no historical record of who won or how players performed over time.
 
 ## Medal system
 
 Award gold, silver, and bronze medals based on race times. Absolute thresholds are unfair on harder tracks (random codes produce wildly different layouts). Percentile-based needs a minimum player count to be meaningful. Recommended approach: percentile-based with a minimum participant threshold (e.g. top 10% gold, top 30% silver, top 60% bronze, but only if at least N players competed). Medals should only be awarded from official daily/weekly challenges — not from custom shared series, to prevent ranking inflation from easy self-made courses.
 
-**Where:** new feature (needs user accounts and a time-recording backend)
+**Where:** new feature (needs challenge finalization job)
 **Why it matters:** Adds progression and replayability — players have concrete goals beyond beating their own ghost.
 
 ## Custom shared series — leaderboards and invites
 
-Series configs can now be shared via URL (`?s=` parameter with comma-separated descriptors). The remaining work is the social layer: direct invites to friends from a friend list, and a shared leaderboard that compares times across players for the same series. Recording and comparing results requires user accounts and a backend.
+Series configs can be shared via URL (`?s=` parameter with comma-separated descriptors). The remaining work is the social layer: direct invites to friends from a friend list, and a shared leaderboard that compares times across players for the same series.
 
-**Where:** new feature (leaderboard and invites need backend + user accounts + friend system)
+**Where:** new feature (needs friend system)
 **Why it matters:** The sharing link is in place — players can already challenge friends by sending a URL. Adding a leaderboard and invite system would close the loop by letting them compare results.
 
 ## Global rankings
 
 A leaderboard ranked by medals earned in daily and weekly challenges — not by raw time or total races. This keeps rankings meaningful (only official challenges count) and rewards consistency over one-off performances. Scoring could weight gold/silver/bronze (e.g. 3/2/1 points) and optionally decay over time to keep the board active.
 
-**Where:** new feature (needs daily/weekly challenges, medal system, and user accounts)
+**Where:** new feature (needs medal system and challenge finalization)
 **Why it matters:** Creates a competitive layer that ties the other features together — challenges, medals, and accounts all feed into one visible ranking. Country filter on user accounts enables both national and worldwide views.
 
 ## Anti-cheat for challenges
@@ -66,16 +66,16 @@ Bot detection (statistical flagging of inputs that are unnaturally smooth or sus
 
 ## Ghost sync and friend ghosts
 
-Ghosts are currently localStorage-only. Each user keeps one ghost per map config (their personal best). Once accounts exist, when racing a track a friend has also raced, show their ghost alongside your own best. The server only needs to persist ghosts for competitive or social contexts — challenge tracks and shared series. Personal random-track ghosts stay in localStorage (no server cost). See "Ghost replay compression" for reducing per-replay size before syncing.
+Ghosts are currently localStorage-only. Each user keeps one ghost per map config (their personal best). When racing a track a friend has also raced, show their ghost alongside your own best. The server only needs to persist ghosts for competitive or social contexts — challenge tracks and shared series. Personal random-track ghosts stay in localStorage (no server cost). See "Ghost replay compression" for reducing per-replay size before syncing.
 
-**Where:** new feature (needs user accounts and backend storage)
+**Where:** new feature (needs friend system and backend ghost storage)
 **Why it matters:** Racing against a friend's ghost is more motivating than racing alone. Bridges single-player and social without requiring real-time multiplayer.
 
 ## Challenge history and profile page
 
 A user's past challenge results, medal collection, and stats — total races, medal breakdown, best finishes, favorite tracks. Gives the account substance beyond a username and makes progression visible.
 
-**Where:** new feature (needs user accounts, challenge archive, and medal records)
+**Where:** new feature (needs challenge finalization and medal system)
 **Why it matters:** Players want to see their history and share their achievements. A profile is the natural home for all the data these features generate.
 
 ## Spectate replays
@@ -96,29 +96,19 @@ Preset series configs (e.g. "Sprint: 5 tracks, 1 lap, all RNG" or "Endurance: 3 
 
 Notify users when: a friend invites them to a series, a challenge they participated in finalizes and medals are assigned, or someone beats their time on a shared series. Could start as in-app notifications and optionally extend to email or push.
 
-**Where:** new feature (needs user accounts, friend system, and backend event system)
+**Where:** new feature (needs friend system and backend event system)
 **Why it matters:** Without notifications, users have to manually check for updates. Notifications close the loop on every social interaction.
 
 ## Data storage strategy
 
-Not all race data needs server-side persistence. Draw a clear line: the server only stores data that's competitive or social. Everything solo stays on the client.
+The server only stores competitive data: race challenge best times (in `best_times`) and series challenge totals (in `challenge_times`). Personal random-track bests stay in localStorage. Future storage concerns:
 
-- **Challenge times and ghosts** (server): bounded at ~1 daily + 1 weekly challenge. 3,000 users × 1 best time each = one small table. Ghost replays: store only the top 3 per challenge for spectating (~225KB per challenge). User's own best ghost synced for cross-device access.
-- **Shared series results** (server): proportional to series created. Expire results after 30-90 days to prevent unbounded growth.
-- **Personal random-track bests and ghosts** (client): stay in localStorage. Unbounded track codes mean unbounded configs — the server should not try to store every random track a user ever races.
-- **Friend ghosts** (server): one replay per friend per shared track. Served on demand, not pre-synced.
+- **Ghost replays** are not yet synced server-side. When adding ghost sync, store only the top 3 per challenge for spectating (~225KB per challenge) and the user's own best ghost for cross-device access.
+- **Shared series results** should expire after 30–90 days to prevent unbounded growth.
+- **Friend ghosts**: one replay per friend per shared track, served on demand, not pre-synced.
 
-At 3,000 users this architecture keeps the database small (challenge times are ~1M rows/year, ghost storage is under 100MB/year for spectating replays). The unbounded personal data stays where it belongs — on the client.
-
-**Where:** architectural decision (affects backend schema and sync logic)
-**Why it matters:** Trying to store everything server-side creates an unbounded storage problem. Splitting by competitive/social vs. personal keeps costs predictable.
-
-## Car settings sync with user accounts
-
-Car customization (pattern, colors, headlight shape, underglow) is currently localStorage-only. Once user accounts exist, these settings should sync to the profile so they persist across devices. The ghost car currently uses a hardcoded blue — friend ghosts could render in the friend's chosen car colors.
-
-**Where:** `game.js` car settings, future backend profile
-**Why it matters:** Car identity is lost on device switch. Friend ghosts all looking identical (blue) misses an opportunity to make them recognizable.
+**Where:** future schema changes
+**Why it matters:** Splitting by competitive/social vs. personal keeps costs predictable.
 
 ## Ghost replay compression — reduce sample rate
 

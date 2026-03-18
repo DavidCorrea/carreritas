@@ -313,6 +313,10 @@
       apiRequest('PUT', '/api/settings', { settings: settings }).catch(function () {});
     },
     loadBest: function (code, laps, rev, night, callback) {
+      if (challengeMode !== 'daily-race' && challengeMode !== 'weekly-race') {
+        callback(loadLocalBest(code, laps, rev, night));
+        return;
+      }
       var qs = '?track_code=' + encodeURIComponent(code)
              + '&laps=' + laps
              + '&reversed=' + !!rev
@@ -331,28 +335,15 @@
     },
     saveBest: function (code, laps, rev, night, time, frames) {
       localStorage.setItem(storageKey(code, laps, rev, night), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames), date: Date.now() }));
-      apiRequest('POST', '/api/times', {
-        track_code: code, laps: laps, reversed: rev, night_mode: night,
-        time_ms: time, ghost_data: encodeReplay(frames)
-      }).catch(function () {});
+      if (challengeMode === 'daily-race' || challengeMode === 'weekly-race') {
+        apiRequest('POST', '/api/times', {
+          track_code: code, laps: laps, reversed: rev, night_mode: night,
+          time_ms: time, ghost_data: encodeReplay(frames)
+        }).catch(function () {});
+      }
     },
     getAllBestTimes: function (callback) {
-      apiRequest('GET', '/api/times').then(function (data) {
-        if (!data.times) { callback([]); return; }
-        var records = [];
-        for (var i = 0; i < data.times.length; i++) {
-          var t = data.times[i];
-          records.push({
-            code: t.track_code, laps: t.laps,
-            reversed: t.reversed, nightMode: t.night_mode,
-            time: t.time_ms,
-            date: t.recorded_at ? new Date(t.recorded_at).getTime() : null
-          });
-        }
-        callback(records);
-      }).catch(function () {
-        GuestSession.getAllBestTimes(callback);
-      });
+      GuestSession.getAllBestTimes(callback);
     }
   };
 
@@ -426,21 +417,6 @@
 
   function uploadLocalData() {
     apiRequest('PUT', '/api/settings', { settings: carSettings }).catch(function () {});
-    var records = loadLocalAllBestTimes();
-    for (var i = 0; i < records.length; i++) {
-      var rec = records[i];
-      var key = storageKey(rec.code, rec.laps, rec.reversed, rec.nightMode);
-      try {
-        var data = JSON.parse(localStorage.getItem(key));
-        if (data && data.time) {
-          apiRequest('POST', '/api/times', {
-            track_code: rec.code, laps: rec.laps,
-            reversed: rec.reversed, night_mode: rec.nightMode,
-            time_ms: rec.time, ghost_data: data.packed || null
-          }).catch(function () {});
-        }
-      } catch (_) {}
-    }
   }
 
   function showAuthPanel() {
@@ -2111,6 +2087,7 @@
     hud.style.display = 'none';
     resultsEl.style.display = 'flex';
     resultsList.innerHTML = '';
+    leaderboardBtn.style.display = challengeMode ? '' : 'none';
 
     recording.push({ x: player.x, z: player.z, a: player.angle });
     var isNewBest = !bestTime || player.finishTime < bestTime;

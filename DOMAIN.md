@@ -78,8 +78,8 @@ A panel that lists all personal best times stored in localStorage. Each entry sh
 
 ## User Account
 
-Optional username + password authentication. Stored in Postgres (Neon). Passwords are bcrypt-hashed. Authentication uses JWT tokens stored in localStorage. Logging in uploads all local best times and car settings to the server. Logging in on a new device downloads remote car settings. The game works fully without an account — all features remain available via localStorage.
+Optional username + password authentication. Stored in Postgres (Neon). Passwords are bcrypt-hashed. Authentication uses JWT tokens stored in localStorage. Logging in uploads car settings to the server. Logging in on a new device downloads remote car settings. The game works fully without an account — all features remain available via localStorage.
 
 ## Leaderboard
 
-A ranking of the top 20 best times across all users. Accessible from the results screen (shows the current race/challenge leaderboard directly) and from the menu (shows a selection view to pick a challenge or current track). Race challenge leaderboards query the `best_times` table by track descriptor. Series challenge leaderboards query the `challenge_times` table by challenge key. Public — no auth required to view.
+A ranking of the top 10 best times across all users. Accessible from the results screen (shows the current race/challenge leaderboard directly) and from the menu (shows a selection view to pick a challenge or current track). Race challenge leaderboards query the `best_times` table by track descriptor. Series challenge leaderboards query the `challenge_times` table by challenge key. Public — no auth required to view.
