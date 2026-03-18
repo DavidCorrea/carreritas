@@ -28,7 +28,7 @@
   var savedCameraModeIndex = 0;
   var previewRunning = false;
   var previewT = 0;
-  var PREVIEW_SPEED = 0.03;
+  var PREVIEW_SPEED = 0.05;
   var TRACK_SAMPLES = 400;
   var RECORD_INTERVAL = 0.1;
   var STORAGE_PREFIX = 'haxrace_ghost_';
