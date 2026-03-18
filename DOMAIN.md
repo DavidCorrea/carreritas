@@ -32,6 +32,10 @@ A sequence of 2–5 races (stages) played back-to-back. Each stage has its own t
 
 One race within a series. Configured independently for track code, direction, and mode.
 
+## Daily Track
+
+A race configuration (track code, direction, mode, laps) deterministically generated from the current UTC date. The date string is hashed into a seed for a PRNG (mulberry32), so every player gets the exact same race on the same day — no backend needed.
+
 ## Best Runs (Records)
 
 A panel that lists all personal best times stored in localStorage. Each entry shows the track preview (SVG), track code, time, lap count, direction, mode, and date. Players can retry any record directly, which loads the track configuration and starts a countdown.

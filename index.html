@@ -164,9 +164,13 @@
     }
     #overlay button:active { transform: scale(0.94); }
 
-    #random-btn {
+    #random-btn, #daily-btn {
       font-size: 13px; padding: 0 14px;
       border-radius: 5px; letter-spacing: 1px;
+    }
+    #daily-btn {
+      border-color: rgba(78, 205, 196, 0.3);
+      color: rgba(78, 205, 196, 0.6);
     }
     #rng-all-btn {
       font-size: 12px; padding: 0 14px;
@@ -485,6 +489,7 @@
         <div class="track-input-row">
           <input id="track-code-input" type="text" maxlength="18" value="" spellcheck="false" autocomplete="off">
           <button id="random-btn" type="button">RNG</button>
+          <button id="daily-btn" type="button">DAILY</button>
         </div>
         <div class="dir-mode-row">
           <div class="dir-mode-group">

@@ -73,6 +73,7 @@
   var copyTrackBtn = document.getElementById('copy-track-btn');
   var trackCodeInput = document.getElementById('track-code-input');
   var randomBtn = document.getElementById('random-btn');
+  var dailyBtn = document.getElementById('daily-btn');
   var lapsValueEl = document.getElementById('laps-value');
   var lapsLabel = document.getElementById('laps-label');
   var lapsMinusBtn = document.getElementById('laps-minus');
@@ -499,6 +500,42 @@
     return out;
   }
 
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function seededCode(rng) {
+    var out = '';
+    for (var i = 0; i < 18; i++) {
+      out += String.fromCharCode(33 + Math.floor(rng() * 94));
+    }
+    return out;
+  }
+
+  function dailyConfig() {
+    var now = new Date();
+    var dateStr = now.getUTCFullYear() + '-' +
+      String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getUTCDate()).padStart(2, '0');
+    var hash = 0;
+    for (var i = 0; i < dateStr.length; i++) {
+      hash = ((hash << 5) - hash) + dateStr.charCodeAt(i);
+      hash |= 0;
+    }
+    var rng = mulberry32(hash);
+    return {
+      code: seededCode(rng),
+      reversed: rng() > 0.5,
+      nightMode: rng() > 0.5,
+      laps: Math.floor(rng() * 5) + 1
+    };
+  }
+
   // ── Player ────────────────────────────────────────────────────────
   function createPlayer() {
     var start = getStartPosition();
@@ -713,9 +750,17 @@
       rngBtn.textContent = 'RNG';
       (function (idx, inp) {
         rngBtn.addEventListener('click', function () {
-          var code = randomCode();
-          stageConfigs[idx].code = code;
-          inp.value = code;
+          stageConfigs[idx].code = randomCode();
+          stageConfigs[idx].reversed = Math.random() > 0.5;
+          stageConfigs[idx].nightMode = Math.random() > 0.5;
+          inp.value = stageConfigs[idx].code;
+          var stageBlock = inp.closest('.stage-block');
+          var dirSeg = stageBlock.querySelectorAll('.seg-control-sm')[0];
+          dirSeg.querySelector('.selected').classList.remove('selected');
+          dirSeg.querySelector('[data-val="' + (stageConfigs[idx].reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+          var modeSeg = stageBlock.querySelectorAll('.seg-control-sm')[1];
+          modeSeg.querySelector('.selected').classList.remove('selected');
+          modeSeg.querySelector('[data-val="' + (stageConfigs[idx].nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
         });
       })(i, input);
       topRow.appendChild(rngBtn);
@@ -846,7 +891,42 @@
 
     randomBtn.addEventListener('click', function () {
       trackCodeInput.value = randomCode();
+
+      reversed = Math.random() > 0.5;
+      dirToggleBtn.querySelector('.selected').classList.remove('selected');
+      dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+
+      nightMode = Math.random() > 0.5;
+      modeToggleBtn.querySelector('.selected').classList.remove('selected');
+      modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+
       if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
+    });
+
+    dailyBtn.addEventListener('click', function () {
+      var config = dailyConfig();
+
+      seriesMode = false;
+      raceTypeBtn.querySelector('.selected').classList.remove('selected');
+      raceTypeBtn.querySelector('[data-val="SINGLE"]').classList.add('selected');
+      singleConfigEl.style.display = '';
+      seriesConfigEl.style.display = 'none';
+      lapsLabel.textContent = 'LAPS';
+
+      trackCodeInput.value = config.code;
+
+      reversed = config.reversed;
+      dirToggleBtn.querySelector('.selected').classList.remove('selected');
+      dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+
+      nightMode = config.nightMode;
+      modeToggleBtn.querySelector('.selected').classList.remove('selected');
+      modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+
+      totalLaps = config.laps;
+      lapsValueEl.textContent = totalLaps;
+
+      if (gameState === 'menu') rebuildTrack(config.code);
     });
 
     lapsMinusBtn.addEventListener('click', function () {
