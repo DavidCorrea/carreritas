@@ -25,7 +25,7 @@ The file is organized into labeled sections:
 - **Input** — keyboard event handlers, menu button handlers
 - **HUD** — updates lap counter, timer, speed, best time, stage indicator
 - **Game state** — countdown, race start, results screen, restart flow, best runs panel
-- **Camera** — smooth follow on the player position
+- **Camera** — smooth follow on the player position. Includes a showcase mode (cinematic orbits with shot transitions) used in the car settings preview
 - **Lighting** — headlight beams, underglow mesh/light, glow effects. Beam shape derived from headlight shape setting
 - **Night mode** — 2D canvas overlay with headlight beam masking
 - **Main loop** — `requestAnimationFrame` loop dispatching to the current game state

@@ -14,6 +14,18 @@
   var CAMERA_HEIGHT = 300;
   var CAMERA_MODES = ['TOP-DOWN', 'ROTATED', 'CHASE', 'ISOMETRIC'];
   var cameraModeIndex = 0;
+
+  var SHOWCASE_SHOTS = [
+    { duration: 6, radius: 45, height: 12, speed: 0.3, lookY: 5 },
+    { duration: 7, radius: 80, height: 50, speed: -0.2, lookY: 0 },
+    { duration: 5, radiusStart: 90, radiusEnd: 30, height: 18, speed: 0.15, lookY: 8 },
+    { duration: 6, radius: 55, height: 30, speed: 0.25, lookY: 3 }
+  ];
+  var SHOWCASE_TRANSITION = 1.5;
+  var showcaseActive = false;
+  var showcaseTimer = 0;
+  var showcaseShotIndex = 0;
+  var savedCameraModeIndex = 0;
   var TRACK_SAMPLES = 400;
   var RECORD_INTERVAL = 0.1;
   var STORAGE_PREFIX = 'haxrace_ghost_';
@@ -1303,8 +1315,16 @@
       if (!btn || btn.classList.contains('selected')) return;
       previewCameraToggle.querySelector('.selected').classList.remove('selected');
       btn.classList.add('selected');
-      cameraModeIndex = parseInt(btn.dataset.val);
-      applyCameraMode();
+      if (btn.dataset.val === 'showcase') {
+        showcaseActive = true;
+        showcaseTimer = 0;
+        showcaseShotIndex = 0;
+        camera = perspCamera;
+      } else {
+        showcaseActive = false;
+        cameraModeIndex = parseInt(btn.dataset.val);
+        applyCameraMode();
+      }
     });
   }
 
@@ -1802,10 +1822,16 @@
 
   function buildCameraToggle() {
     previewCameraToggle.innerHTML = '';
+    var showcaseBtn = document.createElement('button');
+    showcaseBtn.type = 'button';
+    showcaseBtn.className = 'seg-option' + (showcaseActive ? ' selected' : '');
+    showcaseBtn.dataset.val = 'showcase';
+    showcaseBtn.textContent = 'SHOWCASE';
+    previewCameraToggle.appendChild(showcaseBtn);
     for (var i = 0; i < CAMERA_MODES.length; i++) {
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'seg-option' + (i === cameraModeIndex ? ' selected' : '');
+      btn.className = 'seg-option' + (!showcaseActive && i === cameraModeIndex ? ' selected' : '');
       btn.dataset.val = String(i);
       btn.textContent = CAMERA_MODES[i];
       previewCameraToggle.appendChild(btn);
@@ -1821,6 +1847,12 @@
     underglowOpacityEl.value = carSettings.underglowOpacity;
     underglowOpacityLabel.textContent = carSettings.underglowOpacity + '%';
     buildPatternButtons();
+
+    savedCameraModeIndex = cameraModeIndex;
+    showcaseActive = true;
+    showcaseTimer = 0;
+    showcaseShotIndex = 0;
+    camera = perspCamera;
     buildCameraToggle();
 
     savedNightMode = nightMode;
@@ -1846,6 +1878,9 @@
 
   function hideSettings() {
     nightMode = savedNightMode;
+    showcaseActive = false;
+    cameraModeIndex = savedCameraModeIndex;
+    applyCameraMode();
     settingsEl.classList.add('hidden');
     settingsBackEl.style.display = 'none';
     overlay.classList.remove('hidden');
@@ -1853,6 +1888,54 @@
   }
 
   // ── Camera ────────────────────────────────────────────────────────
+  function showcaseShotPosition(shot, elapsed, angleOffset) {
+    var r = shot.radiusStart != null
+      ? shot.radiusStart + (shot.radiusEnd - shot.radiusStart) * (elapsed / shot.duration)
+      : shot.radius;
+    var ang = angleOffset + elapsed * shot.speed;
+    return {
+      x: player.x + Math.sin(ang) * r,
+      y: shot.height,
+      z: player.z + Math.cos(ang) * r,
+      lookY: shot.lookY
+    };
+  }
+
+  function updateShowcaseCamera(dt) {
+    if (!player) return;
+    camera = perspCamera;
+
+    showcaseTimer += dt;
+    var shot = SHOWCASE_SHOTS[showcaseTimer < 0 ? 0 : showcaseShotIndex];
+    var elapsed = showcaseTimer;
+
+    if (elapsed >= shot.duration) {
+      showcaseTimer = 0;
+      elapsed = 0;
+      showcaseShotIndex = (showcaseShotIndex + 1) % SHOWCASE_SHOTS.length;
+      shot = SHOWCASE_SHOTS[showcaseShotIndex];
+    }
+
+    var angleOffset = showcaseShotIndex * 1.8;
+    var pos = showcaseShotPosition(shot, elapsed, angleOffset);
+
+    if (elapsed < SHOWCASE_TRANSITION) {
+      var prevIndex = (showcaseShotIndex - 1 + SHOWCASE_SHOTS.length) % SHOWCASE_SHOTS.length;
+      var prevShot = SHOWCASE_SHOTS[prevIndex];
+      var prevAngle = prevIndex * 1.8;
+      var prevPos = showcaseShotPosition(prevShot, prevShot.duration, prevAngle);
+      var t = elapsed / SHOWCASE_TRANSITION;
+      t = t * t * (3 - 2 * t);
+      pos.x = prevPos.x + (pos.x - prevPos.x) * t;
+      pos.y = prevPos.y + (pos.y - prevPos.y) * t;
+      pos.z = prevPos.z + (pos.z - prevPos.z) * t;
+      pos.lookY = prevPos.lookY + (pos.lookY - prevPos.lookY) * t;
+    }
+
+    camera.position.set(pos.x, pos.y, pos.z);
+    camera.lookAt(player.x, pos.lookY, player.z);
+  }
+
   function updateCamera() {
     var mode = CAMERA_MODES[cameraModeIndex];
     if (mode === 'TOP-DOWN') {
@@ -2152,7 +2235,13 @@
       updateHUD();
     }
 
-    if (player) updateCamera();
+    if (player) {
+      if (showcaseActive) {
+        updateShowcaseCamera(dt);
+      } else {
+        updateCamera();
+      }
+    }
     updateNightMode();
     renderer.render(scene, camera);
   }
