@@ -47,7 +47,7 @@ Player-configurable car appearance, persisted in localStorage. Includes:
 - **Underglow Color** — the color of the neon-style light under the car, visible as both a mesh and a point light casting onto the ground.
 - **Underglow Opacity** — controls underglow visibility from 0% (off) to 100% (full). Affects both the glow mesh and the point light intensity.
 
-Settings are previewed live on the current map. The settings UI includes a day/night toggle and camera mode selector for previewing. A cinematic "Showcase" camera mode activates by default when the settings panel opens, cycling through slow orbits and sweeps around the car with smooth transitions between shots.
+Settings are previewed live on the current map. The settings UI includes a day/night toggle, camera mode selector, and an idle/running toggle. In running mode the car auto-drives along the track centerline so the player can see their car in motion. A cinematic "Showcase" camera mode activates by default when the settings panel opens, cycling through slow orbits and sweeps around the car with smooth transitions between shots.
 
 ## Best Runs (Records)
 

@@ -26,6 +26,9 @@
   var showcaseTimer = 0;
   var showcaseShotIndex = 0;
   var savedCameraModeIndex = 0;
+  var previewRunning = false;
+  var previewT = 0;
+  var PREVIEW_SPEED = 0.03;
   var TRACK_SAMPLES = 400;
   var RECORD_INTERVAL = 0.1;
   var STORAGE_PREFIX = 'haxrace_ghost_';
@@ -94,7 +97,6 @@
   var ambientLight, carPointLight;
   var beamMeshL, beamMeshR, glowMesh, tailMesh;
   var underglowMesh, underglowLight;
-  var centerLineMat;
   var gameState = 'menu';
   var recordsVisible = false;
   var raceTimer = 0;
@@ -163,6 +165,7 @@
   var patternOptionsEl = document.getElementById('pattern-options');
   var previewModeToggle = document.getElementById('preview-mode-toggle');
   var previewCameraToggle = document.getElementById('preview-camera-toggle');
+  var previewDriveToggle = document.getElementById('preview-drive-toggle');
   var settingsVisible = false;
   var previewNightMode = false;
   var savedNightMode = false;
@@ -416,7 +419,6 @@
     buildTrackSurface(inner, outer);
     buildWalls(inner, outer);
     buildStartLine(curve);
-    buildCenterLine(sampled);
 
     return { curve: curve, sampled: sampled, inner: inner, outer: outer };
   }
@@ -478,19 +480,6 @@
       box.rotation.y = angle;
       trackGroup.add(box);
     }
-  }
-
-  function buildCenterLine(sampled) {
-    var geom = new THREE.BufferGeometry();
-    var verts = [];
-    for (var i = 0; i < sampled.length; i += 6) {
-      var j = (i + 3) % sampled.length;
-      verts.push(sampled[i].x, 0.03, sampled[i].z);
-      verts.push(sampled[j].x, 0.03, sampled[j].z);
-    }
-    geom.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    centerLineMat = new THREE.LineBasicMaterial({ color: 0x666666 });
-    trackGroup.add(new THREE.LineSegments(geom, centerLineMat));
   }
 
   // ── Car mesh creation ─────────────────────────────────────────────
@@ -1326,6 +1315,15 @@
         applyCameraMode();
       }
     });
+
+    previewDriveToggle.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      previewDriveToggle.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      previewRunning = btn.dataset.val === 'RUNNING';
+      if (previewRunning) previewT = 0;
+    });
   }
 
   function getPlayerInput() {
@@ -1861,6 +1859,12 @@
     if (sel) sel.classList.remove('selected');
     previewModeToggle.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
 
+    previewRunning = false;
+    previewT = 0;
+    var driveSel = previewDriveToggle.querySelector('.selected');
+    if (driveSel) driveSel.classList.remove('selected');
+    previewDriveToggle.querySelector('[data-val="IDLE"]').classList.add('selected');
+
     overlay.classList.add('hidden');
     settingsEl.classList.remove('hidden');
     settingsBackEl.style.display = '';
@@ -1879,12 +1883,33 @@
   function hideSettings() {
     nightMode = savedNightMode;
     showcaseActive = false;
+    previewRunning = false;
     cameraModeIndex = savedCameraModeIndex;
     applyCameraMode();
+    if (player) {
+      var start = getStartPosition();
+      player.x = start.x;
+      player.z = start.z;
+      player.angle = start.angle;
+      player.mesh.position.set(player.x, 0, player.z);
+      player.mesh.rotation.y = player.angle;
+    }
     settingsEl.classList.add('hidden');
     settingsBackEl.style.display = 'none';
     overlay.classList.remove('hidden');
     settingsVisible = false;
+  }
+
+  function updatePreviewDrive(dt) {
+    if (!player || !track) return;
+    previewT = (previewT + PREVIEW_SPEED * dt) % 1;
+    var pt = track.curve.getPointAt(previewT);
+    var tan = track.curve.getTangentAt(previewT);
+    player.x = pt.x;
+    player.z = pt.z;
+    player.angle = Math.atan2(tan.x, tan.z);
+    player.mesh.position.set(player.x, 0, player.z);
+    player.mesh.rotation.y = player.angle;
   }
 
   // ── Camera ────────────────────────────────────────────────────────
@@ -2167,8 +2192,6 @@
     var isNight = nightMode;
     ambientLight.intensity = isNight ? 0 : 1.0;
     scene.background.set(isNight ? 0x000000 : 0x5d8a4a);
-    if (centerLineMat) centerLineMat.color.set(isNight ? 0x111111 : 0x666666);
-
     carPointLight.intensity = isNight ? 0.8 : 0;
 
     var hasPlayer = !!player;
@@ -2233,6 +2256,10 @@
       }
 
       updateHUD();
+    }
+
+    if (settingsVisible && previewRunning) {
+      updatePreviewDrive(dt);
     }
 
     if (player) {
