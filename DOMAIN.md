@@ -36,9 +36,24 @@ A sequence of 2–5 races (stages) played back-to-back. Each stage has its own t
 
 One race within a series. Configured independently for track code, direction, and mode.
 
+## Challenge Modes
+
+Four time-limited challenge modes where every player gets the same configuration. All use the same PRNG seeding mechanism (mulberry32).
+
+- **Daily Race** — a single race generated from the current UTC date string. The seed is the bare date (`"2026-03-18"`) for backward compatibility with the original daily track. Produces track code, direction, mode, and laps.
+- **Daily Series** — a multi-stage series generated from `"ds-" + dateStr`. Produces stage count (2–5), per-stage track code/direction/mode, and laps per stage.
+- **Weekly Race** — a single race generated from `"wr-" + mondayStr`, where `mondayStr` is the UTC Monday of the current week. Same configuration for all players from Monday 00:00 UTC through Sunday 23:59 UTC.
+- **Weekly Series** — a multi-stage series generated from `"ws-" + mondayStr`. Same weekly window as the weekly race.
+
+Challenge mode is tracked as game state (`challengeMode`). Setting it labels the results screen, includes the challenge name in share text, and directs the leaderboard to the correct data source. Manually changing any config clears the challenge mode.
+
+## Challenge Key
+
+An identifier for a challenge instance, used to store and query series total times. Format: `"<prefix>:<date>"`. Examples: `"ds:2026-03-18"` (daily series), `"ws:2026-03-16"` (weekly series, keyed by Monday). Race challenges don't use challenge keys — they use the existing best_times table since they're normal single-track races.
+
 ## Daily Track
 
-A race configuration (track code, direction, mode, laps) deterministically generated from the current UTC date. The date string is hashed into a seed for a PRNG (mulberry32), so every player gets the exact same race on the same day — no backend needed.
+A race configuration (track code, direction, mode, laps) deterministically generated from the current UTC date. The date string is hashed into a seed for a PRNG (mulberry32), so every player gets the exact same race on the same day — no backend needed. Now part of the Challenge Modes system as "Daily Race".
 
 ## Car Settings
 
@@ -60,3 +75,11 @@ After finishing a race or series, a Share button copies a formatted text to the 
 ## Best Runs (Records)
 
 A panel that lists all personal best times stored in localStorage. Each entry shows the track preview (SVG), full track descriptor, time, and date. Players can retry any record directly, which loads the track configuration and starts a countdown.
+
+## User Account
+
+Optional username + password authentication. Stored in Postgres (Neon). Passwords are bcrypt-hashed. Authentication uses JWT tokens stored in localStorage. Logging in uploads all local best times and car settings to the server. Logging in on a new device downloads remote car settings. The game works fully without an account — all features remain available via localStorage.
+
+## Leaderboard
+
+A ranking of the top 20 best times across all users. Accessible from the results screen (shows the current race/challenge leaderboard directly) and from the menu (shows a selection view to pick a challenge or current track). Race challenge leaderboards query the `best_times` table by track descriptor. Series challenge leaderboards query the `challenge_times` table by challenge key. Public — no auth required to view.
