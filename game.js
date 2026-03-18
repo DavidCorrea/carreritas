@@ -34,6 +34,7 @@
   var STORAGE_PREFIX = 'haxrace_ghost_';
 
   var seriesMode = false;
+  var challengeMode = null;
   var stageCount = 3;
   var stageConfigs = [
     { code: '', reversed: false, nightMode: false },
@@ -56,9 +57,7 @@
     underglowColor: '#ff00ff',
     underglowOpacity: 100
   };
-  var carSettings = loadSettings();
-
-  function loadSettings() {
+  var carSettings = (function () {
     try {
       var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
       if (saved) {
@@ -68,11 +67,7 @@
       }
     } catch (_) {}
     return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-  }
-
-  function saveSettings() {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(carSettings));
-  }
+  })();
 
   function hexToInt(hex) {
     return parseInt(hex.replace('#', ''), 16);
@@ -99,6 +94,7 @@
   var underglowMesh, underglowLight;
   var gameState = 'menu';
   var recordsVisible = false;
+  var leaderboardFrom = null;
   var raceTimer = 0;
   var countdownTimer = 0;
   var countdownValue = 0;
@@ -129,7 +125,11 @@
   var shareBtn = document.getElementById('share-btn');
   var trackCodeInput = document.getElementById('track-code-input');
   var randomBtn = document.getElementById('random-btn');
-  var dailyBtn = document.getElementById('daily-btn');
+  var menuTabToggle = document.getElementById('menu-tab-toggle');
+  var eventTab = document.getElementById('event-tab');
+  var challengesTab = document.getElementById('challenges-tab');
+  var challengeModeToggle = document.getElementById('challenge-mode-toggle');
+  var challengePreviewEl = document.getElementById('challenge-preview');
   var lapsValueEl = document.getElementById('laps-value');
   var lapsLabel = document.getElementById('laps-label');
   var lapsMinusBtn = document.getElementById('laps-minus');
@@ -153,8 +153,30 @@
   var recordsListEl = document.getElementById('records-list');
   var recordsBtn = document.getElementById('records-btn');
   var recordsBackEl = document.getElementById('records-back');
+  var leaderboardEl = document.getElementById('leaderboard');
+  var leaderboardListEl = document.getElementById('leaderboard-list');
+  var leaderboardTrackEl = document.getElementById('leaderboard-track');
+  var leaderboardBtn = document.getElementById('leaderboard-btn');
+  var leaderboardBackEl = document.getElementById('leaderboard-back');
+  var authEl = document.getElementById('auth');
+  var authForm = document.getElementById('auth-form');
+  var authTitle = document.getElementById('auth-title');
+  var authUsernameInput = document.getElementById('auth-username');
+  var authPasswordInput = document.getElementById('auth-password');
+  var authSubmitBtn = document.getElementById('auth-submit-btn');
+  var authError = document.getElementById('auth-error');
+  var authSwitch = document.getElementById('auth-switch');
+  var authToggleText = document.getElementById('auth-toggle');
+  var authClose = document.getElementById('auth-close');
+  var accountBar = document.getElementById('account-bar');
+  var accountUsername = document.getElementById('account-username');
+  var logoutBtn = document.getElementById('logout-btn');
+  var loginBtn = document.getElementById('login-btn');
   var settingsEl = document.getElementById('settings');
   var settingsBtn = document.getElementById('settings-btn');
+  var leaderboardMenuBtn = document.getElementById('leaderboard-menu-btn');
+  var leaderboardSelectEl = document.getElementById('leaderboard-select');
+  var leaderboardEntriesEl = document.getElementById('leaderboard-entries');
   var settingsBackEl = document.getElementById('settings-back');
   var colorPrimaryEl = document.getElementById('color-primary');
   var colorSecondaryEl = document.getElementById('color-secondary');
@@ -172,9 +194,9 @@
   var previewNightMode = false;
   var savedNightMode = false;
 
-  // ── Persistence (per track code) ──────────────────────────────────
-  function storageKey(code) {
-    return STORAGE_PREFIX + code + '_' + totalLaps + 'L' + (reversed ? '_R' : '') + (nightMode ? '_N' : '');
+  // ── Persistence ─────────────────────────────────────────────────
+  function storageKey(code, laps, rev, night) {
+    return STORAGE_PREFIX + code + '_' + laps + 'L' + (rev ? '_R' : '') + (night ? '_N' : '');
   }
 
   function encodeReplay(frames) {
@@ -208,32 +230,24 @@
     return frames;
   }
 
-  function loadBest(code) {
-    bestReplay = null;
-    bestTime = null;
+  function loadLocalBest(code, laps, rev, night) {
     try {
-      var data = JSON.parse(localStorage.getItem(storageKey(code)));
-      if (!data || !data.time) return;
+      var data = JSON.parse(localStorage.getItem(storageKey(code, laps, rev, night)));
+      if (!data || !data.time) return null;
       if (data.v === 2 && data.packed && data.packed.length >= 3) {
-        bestReplay = decodeReplay(data.packed);
-        bestTime = data.time;
+        return { time: data.time, replay: decodeReplay(data.packed) };
       } else if (data.frames && data.frames.length > 0) {
-        bestReplay = [];
+        var replay = [];
         for (var i = 0; i < data.frames.length; i++) {
-          bestReplay.push({ x: data.frames[i].x, z: data.frames[i].z, a: data.frames[i].a });
+          replay.push({ x: data.frames[i].x, z: data.frames[i].z, a: data.frames[i].a });
         }
-        bestTime = data.time;
+        return { time: data.time, replay: replay };
       }
     } catch (_) {}
+    return null;
   }
 
-  function saveBest(code, time, frames) {
-    bestReplay = frames;
-    bestTime = time;
-    localStorage.setItem(storageKey(code), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames), date: Date.now() }));
-  }
-
-  function getAllBestTimes() {
+  function loadLocalAllBestTimes() {
     var results = [];
     for (var i = 0; i < localStorage.length; i++) {
       var key = localStorage.key(i);
@@ -255,6 +269,413 @@
     }
     results.sort(function (a, b) { return a.time - b.time; });
     return results;
+  }
+
+  // ── Sessions ───────────────────────────────────────────────────
+  var GuestSession = {
+    loadSettings: function (callback) {
+      try {
+        var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+        if (saved) {
+          var s = {};
+          for (var k in DEFAULT_SETTINGS) s[k] = saved[k] !== undefined ? saved[k] : DEFAULT_SETTINGS[k];
+          callback(s);
+          return;
+        }
+      } catch (_) {}
+      callback(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+    },
+    saveSettings: function (settings) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    },
+    loadBest: function (code, laps, rev, night, callback) {
+      callback(loadLocalBest(code, laps, rev, night));
+    },
+    saveBest: function (code, laps, rev, night, time, frames) {
+      localStorage.setItem(storageKey(code, laps, rev, night), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames), date: Date.now() }));
+    },
+    getAllBestTimes: function (callback) {
+      callback(loadLocalAllBestTimes());
+    }
+  };
+
+  var UserSession = {
+    loadSettings: function (callback) {
+      apiRequest('GET', '/api/settings').then(function (data) {
+        if (data.settings) { callback(data.settings); return; }
+        GuestSession.loadSettings(callback);
+      }).catch(function () {
+        GuestSession.loadSettings(callback);
+      });
+    },
+    saveSettings: function (settings) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      apiRequest('PUT', '/api/settings', { settings: settings }).catch(function () {});
+    },
+    loadBest: function (code, laps, rev, night, callback) {
+      var qs = '?track_code=' + encodeURIComponent(code)
+             + '&laps=' + laps
+             + '&reversed=' + !!rev
+             + '&night_mode=' + !!night;
+      apiRequest('GET', '/api/times' + qs).then(function (data) {
+        if (data.times && data.times.length > 0) {
+          var t = data.times[0];
+          var replay = t.ghost_data ? decodeReplay(t.ghost_data) : null;
+          callback({ time: t.time_ms, replay: replay });
+        } else {
+          callback(loadLocalBest(code, laps, rev, night));
+        }
+      }).catch(function () {
+        callback(loadLocalBest(code, laps, rev, night));
+      });
+    },
+    saveBest: function (code, laps, rev, night, time, frames) {
+      localStorage.setItem(storageKey(code, laps, rev, night), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames), date: Date.now() }));
+      apiRequest('POST', '/api/times', {
+        track_code: code, laps: laps, reversed: rev, night_mode: night,
+        time_ms: time, ghost_data: encodeReplay(frames)
+      }).catch(function () {});
+    },
+    getAllBestTimes: function (callback) {
+      apiRequest('GET', '/api/times').then(function (data) {
+        if (!data.times) { callback([]); return; }
+        var records = [];
+        for (var i = 0; i < data.times.length; i++) {
+          var t = data.times[i];
+          records.push({
+            code: t.track_code, laps: t.laps,
+            reversed: t.reversed, nightMode: t.night_mode,
+            time: t.time_ms,
+            date: t.recorded_at ? new Date(t.recorded_at).getTime() : null
+          });
+        }
+        callback(records);
+      }).catch(function () {
+        GuestSession.getAllBestTimes(callback);
+      });
+    }
+  };
+
+  var session = GuestSession;
+
+  function loadBest(code, callback) {
+    bestReplay = null;
+    bestTime = null;
+    session.loadBest(code, totalLaps, reversed, nightMode, function (result) {
+      if (result) {
+        bestTime = result.time;
+        bestReplay = result.replay;
+      }
+      if (callback) callback();
+    });
+  }
+
+  function saveBest(code, time, frames) {
+    bestReplay = frames;
+    bestTime = time;
+    session.saveBest(code, totalLaps, reversed, nightMode, time, frames);
+  }
+
+  function saveSettings() {
+    session.saveSettings(carSettings);
+  }
+
+  // ── Auth ───────────────────────────────────────────────────────
+  var AUTH_KEY = 'carreritas_auth';
+  var authToken = null;
+  var authUsername = null;
+  var authIsRegister = false;
+
+  function loadAuth() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(AUTH_KEY));
+      if (saved && saved.token && saved.username) {
+        authToken = saved.token;
+        authUsername = saved.username;
+        session = UserSession;
+      }
+    } catch (_) {}
+  }
+
+  function persistAuth(token, username) {
+    authToken = token;
+    authUsername = username;
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ token: token, username: username }));
+  }
+
+  function clearAuth() {
+    authToken = null;
+    authUsername = null;
+    localStorage.removeItem(AUTH_KEY);
+  }
+
+  function isLoggedIn() { return !!authToken; }
+
+  function apiRequest(method, path, body) {
+    var opts = {
+      method: method,
+      headers: {}
+    };
+    if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+    if (body) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(path, opts).then(function (r) { return r.json(); });
+  }
+
+  function uploadLocalData() {
+    apiRequest('PUT', '/api/settings', { settings: carSettings }).catch(function () {});
+    var records = loadLocalAllBestTimes();
+    for (var i = 0; i < records.length; i++) {
+      var rec = records[i];
+      var key = storageKey(rec.code, rec.laps, rec.reversed, rec.nightMode);
+      try {
+        var data = JSON.parse(localStorage.getItem(key));
+        if (data && data.time) {
+          apiRequest('POST', '/api/times', {
+            track_code: rec.code, laps: rec.laps,
+            reversed: rec.reversed, night_mode: rec.nightMode,
+            time_ms: rec.time, ghost_data: data.packed || null
+          }).catch(function () {});
+        }
+      } catch (_) {}
+    }
+  }
+
+  function showAuthPanel() {
+    authIsRegister = false;
+    authTitle.textContent = 'LOGIN';
+    authSubmitBtn.textContent = 'LOGIN';
+    authToggleText.innerHTML = 'No account? <a id="auth-switch">Register</a>';
+    authError.textContent = '';
+    authUsernameInput.value = '';
+    authPasswordInput.value = '';
+    authEl.classList.add('visible');
+    document.getElementById('auth-switch').addEventListener('click', toggleAuthMode);
+    authUsernameInput.focus();
+  }
+
+  function hideAuthPanel() {
+    authEl.classList.remove('visible');
+  }
+
+  function toggleAuthMode() {
+    authIsRegister = !authIsRegister;
+    authError.textContent = '';
+    if (authIsRegister) {
+      authTitle.textContent = 'REGISTER';
+      authSubmitBtn.textContent = 'REGISTER';
+      authToggleText.innerHTML = 'Have an account? <a id="auth-switch">Login</a>';
+    } else {
+      authTitle.textContent = 'LOGIN';
+      authSubmitBtn.textContent = 'LOGIN';
+      authToggleText.innerHTML = 'No account? <a id="auth-switch">Register</a>';
+    }
+    document.getElementById('auth-switch').addEventListener('click', toggleAuthMode);
+  }
+
+  function updateAccountBar() {
+    if (isLoggedIn()) {
+      accountUsername.textContent = authUsername;
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = '';
+    } else {
+      accountUsername.textContent = '';
+      loginBtn.style.display = '';
+      logoutBtn.style.display = 'none';
+    }
+  }
+
+  function handleAuthSubmit(e) {
+    e.preventDefault();
+    var username = authUsernameInput.value.trim();
+    var password = authPasswordInput.value;
+    if (!username || !password) { authError.textContent = 'Fill in both fields'; return; }
+
+    var endpoint = authIsRegister ? '/api/register' : '/api/login';
+    authSubmitBtn.disabled = true;
+    authError.textContent = '';
+
+    apiRequest('POST', endpoint, { username: username, password: password })
+      .then(function (data) {
+        authSubmitBtn.disabled = false;
+        if (data.error) { authError.textContent = data.error; return; }
+        persistAuth(data.token, data.username);
+        session = UserSession;
+        hideAuthPanel();
+        updateAccountBar();
+        uploadLocalData();
+        if (!authIsRegister) {
+          session.loadSettings(function (remote) {
+            for (var k in DEFAULT_SETTINGS) {
+              if (remote[k] !== undefined) carSettings[k] = remote[k];
+            }
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(carSettings));
+            applyCarSettings();
+          });
+        }
+      })
+      .catch(function () {
+        authSubmitBtn.disabled = false;
+        authError.textContent = 'Connection error';
+      });
+  }
+
+  // ── MOCK: remove this block to restore real leaderboards ──
+  var MOCK_LB = true;
+  var mockNames = ['speedfreak', 'turbokid', 'driftlord', 'nitrocat', 'blazer99', 'ghostrider', 'apexwolf', 'trackhawk', 'burnout_x', 'revhead', 'slipstream', 'railgun'];
+  var mockLeaderboardView = null;
+  function mockEntries(count, baseTime) {
+    var entries = [];
+    for (var i = 0; i < count; i++) {
+      entries.push({ username: mockNames[i], time_ms: baseTime + i * 1200 + Math.floor(Math.random() * 800) });
+    }
+    return entries;
+  }
+  function mockData(mode) {
+    var me = authUsername || 'you';
+    if (mode === 'daily-race') {
+      var entries = mockEntries(10, 22400);
+      entries[0].username = me;
+      return { entries: entries };
+    }
+    if (mode === 'daily-series') {
+      var entries = mockEntries(10, 68000);
+      entries[2].username = me;
+      return { entries: entries };
+    }
+    if (mode === 'weekly-race') {
+      var entries = mockEntries(10, 45000);
+      entries[9].username = me;
+      return { entries: entries };
+    }
+    if (mode === 'weekly-series') {
+      var entries = mockEntries(10, 120000);
+      return { entries: entries, user_entry: { username: me, time_ms: 158340, rank: 23 } };
+    }
+    return { entries: mockEntries(5, 30000) };
+  }
+  // ── END MOCK ──
+
+  function fetchLeaderboard(code, laps, rev, night, callback) {
+    if (MOCK_LB) { callback(mockData(mockLeaderboardView)); return; }
+    var qs = '?track_code=' + encodeURIComponent(code)
+           + '&laps=' + laps
+           + '&reversed=' + !!rev
+           + '&night_mode=' + !!night;
+    apiRequest('GET', '/api/leaderboard' + qs).then(function (data) {
+      callback(data);
+    }).catch(function () { callback({ entries: [] }); });
+  }
+
+  function fetchChallengeLeaderboard(key, callback) {
+    if (MOCK_LB) { callback(mockData(mockLeaderboardView)); return; }
+    apiRequest('GET', '/api/challenge?challenge_key=' + encodeURIComponent(key)).then(function (data) {
+      callback(data);
+    }).catch(function () { callback({ entries: [] }); });
+  }
+
+  function renderLeaderboardRow(entry, rank, isYou) {
+    var row = document.createElement('div');
+    var cls = 'lb-entry';
+    if (rank <= 3) cls += ' lb-pos-' + rank;
+    if (isYou) cls += ' lb-you';
+    row.className = cls;
+
+    var rankEl = document.createElement('span');
+    rankEl.className = 'lb-rank';
+    rankEl.textContent = rank + '.';
+    row.appendChild(rankEl);
+
+    var name = document.createElement('span');
+    name.className = 'lb-name';
+    name.textContent = entry.username;
+    row.appendChild(name);
+
+    var time = document.createElement('span');
+    time.className = 'lb-time';
+    time.textContent = formatTime(entry.time_ms);
+    row.appendChild(time);
+
+    return row;
+  }
+
+  function renderLeaderboardEntries(data) {
+    var entries = data.entries || [];
+    leaderboardListEl.innerHTML = '';
+    if (entries.length === 0 && !data.user_entry) {
+      var empty = document.createElement('p');
+      empty.className = 'lb-empty';
+      empty.textContent = 'No times yet';
+      leaderboardListEl.appendChild(empty);
+    } else {
+      for (var i = 0; i < entries.length; i++) {
+        var isYou = isLoggedIn() && entries[i].username === authUsername;
+        leaderboardListEl.appendChild(renderLeaderboardRow(entries[i], i + 1, isYou));
+      }
+
+      if (data.user_entry) {
+        var sep = document.createElement('div');
+        sep.className = 'lb-separator';
+        leaderboardListEl.appendChild(sep);
+        leaderboardListEl.appendChild(renderLeaderboardRow(data.user_entry, data.user_entry.rank, true));
+      }
+    }
+  }
+
+  function showLeaderboardSelect() {
+    leaderboardSelectEl.style.display = '';
+    leaderboardEntriesEl.style.display = 'none';
+    overlay.classList.add('hidden');
+    leaderboardEl.style.display = 'flex';
+  }
+
+  function showLeaderboardForChallenge(mode) {
+    leaderboardSelectEl.style.display = 'none';
+    leaderboardEntriesEl.style.display = '';
+    leaderboardListEl.innerHTML = '';
+    mockLeaderboardView = mode;
+
+    var label = challengeLabel(mode);
+    var key = challengeKey(mode);
+    var isSeries = mode === 'daily-series' || mode === 'weekly-series';
+
+    leaderboardTrackEl.textContent = label;
+
+    if (isSeries) {
+      fetchChallengeLeaderboard(key, renderLeaderboardEntries);
+    } else {
+      var config = mode === 'daily-race' ? dailyConfig() : weeklyRaceConfig();
+      fetchLeaderboard(config.code, config.laps, config.reversed, config.nightMode, renderLeaderboardEntries);
+    }
+  }
+
+  function showLeaderboardForCurrentTrack() {
+    leaderboardSelectEl.style.display = 'none';
+    leaderboardEntriesEl.style.display = '';
+    leaderboardListEl.innerHTML = '';
+    var desc = formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps);
+    leaderboardTrackEl.textContent = desc;
+    fetchLeaderboard(currentTrackCode, totalLaps, reversed, nightMode, renderLeaderboardEntries);
+  }
+
+  function showLeaderboard() {
+    leaderboardSelectEl.style.display = 'none';
+    leaderboardEntriesEl.style.display = '';
+    leaderboardListEl.innerHTML = '';
+
+    if (challengeMode) {
+      showLeaderboardForChallenge(challengeMode);
+    } else {
+      showLeaderboardForCurrentTrack();
+    }
+
+    leaderboardEl.style.display = 'flex';
+  }
+
+  function hideLeaderboard() {
+    leaderboardEl.style.display = 'none';
   }
 
   // ── String → track points (polar) ────────────────────────────────
@@ -690,9 +1111,8 @@
 
     currentTrackCode = code;
     track = generateTrack(code);
-    loadBest(code);
     createPlayer();
-    createGhost();
+    loadBest(code, function () { createGhost(); });
   }
 
   function randomCode() {
@@ -739,23 +1159,94 @@
     return out;
   }
 
-  function dailyConfig() {
-    var now = new Date();
-    var dateStr = now.getUTCFullYear() + '-' +
-      String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
-      String(now.getUTCDate()).padStart(2, '0');
+  function hashString(str) {
     var hash = 0;
-    for (var i = 0; i < dateStr.length; i++) {
-      hash = ((hash << 5) - hash) + dateStr.charCodeAt(i);
+    for (var i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
       hash |= 0;
     }
-    var rng = mulberry32(hash);
+    return hash;
+  }
+
+  function utcDateStr() {
+    var now = new Date();
+    return now.getUTCFullYear() + '-' +
+      String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getUTCDate()).padStart(2, '0');
+  }
+
+  function utcMondayStr() {
+    var now = new Date();
+    var daysSinceMonday = (now.getUTCDay() + 6) % 7;
+    var monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday));
+    return monday.getUTCFullYear() + '-' +
+      String(monday.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(monday.getUTCDate()).padStart(2, '0');
+  }
+
+  function seededRaceConfig(seed) {
+    var rng = mulberry32(hashString(seed));
     return {
       code: seededCode(rng),
       reversed: rng() > 0.5,
       nightMode: rng() > 0.5,
       laps: Math.floor(rng() * 5) + 1
     };
+  }
+
+  function seededSeriesConfig(seed) {
+    var rng = mulberry32(hashString(seed));
+    var count = Math.floor(rng() * 4) + 2;
+    var stages = [];
+    for (var i = 0; i < count; i++) {
+      stages.push({
+        code: seededCode(rng),
+        reversed: rng() > 0.5,
+        nightMode: rng() > 0.5
+      });
+    }
+    return {
+      stages: stages,
+      stageCount: count,
+      laps: Math.floor(rng() * 5) + 1
+    };
+  }
+
+  // Bare date seed for backward compat
+  function dailyConfig() {
+    return seededRaceConfig(utcDateStr());
+  }
+
+  function dailySeriesConfig() {
+    return seededSeriesConfig('ds-' + utcDateStr());
+  }
+
+  function weeklyRaceConfig() {
+    var config = seededRaceConfig('wr-' + utcMondayStr());
+    config.laps = 5;
+    return config;
+  }
+
+  function weeklySeriesConfig() {
+    var config = seededSeriesConfig('ws-' + utcMondayStr());
+    config.laps = 5;
+    return config;
+  }
+
+  function challengeKey(mode) {
+    if (mode === 'daily-race') return 'dr:' + utcDateStr();
+    if (mode === 'daily-series') return 'ds:' + utcDateStr();
+    if (mode === 'weekly-race') return 'wr:' + utcMondayStr();
+    if (mode === 'weekly-series') return 'ws:' + utcMondayStr();
+    return null;
+  }
+
+  function challengeLabel(mode) {
+    if (mode === 'daily-race') return 'DAILY RACE';
+    if (mode === 'daily-series') return 'DAILY SERIES';
+    if (mode === 'weekly-race') return 'WEEKLY RACE';
+    if (mode === 'weekly-series') return 'WEEKLY SERIES';
+    return null;
   }
 
   // ── Player ────────────────────────────────────────────────────────
@@ -968,6 +1459,7 @@
       input.autocomplete = 'off';
       (function (idx) {
         input.addEventListener('input', function (e) {
+          challengeMode = null;
           var parsed = parseDescriptor(e.target.value);
           stageConfigs[idx].code = parsed.code;
           e.target.value = parsed.code;
@@ -994,6 +1486,7 @@
       rngBtn.textContent = 'RNG';
       (function (idx, inp) {
         rngBtn.addEventListener('click', function () {
+          challengeMode = null;
           stageConfigs[idx].code = randomCode();
           inp.value = stageConfigs[idx].code;
         });
@@ -1023,6 +1516,7 @@
         seg.addEventListener('click', function (e) {
           var btn = e.target.closest('.seg-option');
           if (!btn || btn.classList.contains('selected')) return;
+          challengeMode = null;
           seg.querySelector('.selected').classList.remove('selected');
           btn.classList.add('selected');
           stageConfigs[idx].reversed = btn.dataset.val === 'REV';
@@ -1048,6 +1542,7 @@
         seg.addEventListener('click', function (e) {
           var btn = e.target.closest('.seg-option');
           if (!btn || btn.classList.contains('selected')) return;
+          challengeMode = null;
           seg.querySelector('.selected').classList.remove('selected');
           btn.classList.add('selected');
           stageConfigs[idx].nightMode = btn.dataset.val === 'NIGHT';
@@ -1071,10 +1566,12 @@
   function setupInput() {
     window.addEventListener('keydown', function (e) {
       keys[e.code] = true;
+      var authOpen = authEl.classList.contains('visible');
+      var lbOpen = leaderboardEl.style.display === 'flex';
 
-      if (e.code === 'Enter') {
+      if (e.code === 'Enter' && !authOpen) {
         e.preventDefault();
-        if (gameState === 'menu' && !recordsVisible && !settingsVisible) {
+        if (gameState === 'menu' && !recordsVisible && !settingsVisible && !lbOpen) {
           startCountdown();
         } else if (gameState === 'finished') {
           if (seriesMode && currentStageIndex < stageCount - 1) {
@@ -1087,7 +1584,19 @@
 
       if (e.code === 'Escape') {
         e.preventDefault();
-        if (settingsVisible) {
+        if (authEl.classList.contains('visible')) {
+          hideAuthPanel();
+        } else if (leaderboardEl.style.display === 'flex') {
+          if (leaderboardFrom === 'menu' && leaderboardEntriesEl.style.display !== 'none') {
+            leaderboardEntriesEl.style.display = 'none';
+            leaderboardSelectEl.style.display = '';
+          } else {
+            hideLeaderboard();
+            if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
+            else overlay.classList.remove('hidden');
+            leaderboardFrom = null;
+          }
+        } else if (settingsVisible) {
           hideSettings();
         } else if (recordsVisible) {
           hideRecords();
@@ -1096,7 +1605,7 @@
         }
       }
 
-      if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+      if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && !authOpen && !lbOpen) {
         e.preventDefault();
         if (gameState === 'menu' && !recordsVisible && !settingsVisible) {
           startCountdown();
@@ -1120,6 +1629,7 @@
     window.addEventListener('keyup', function (e) { keys[e.code] = false; });
 
     trackCodeInput.addEventListener('input', function () {
+      challengeMode = null;
       clearTimeout(rebuildTimer);
       rebuildTimer = setTimeout(function () {
         var parsed = parseDescriptor(trackCodeInput.value);
@@ -1143,40 +1653,129 @@
     });
 
     randomBtn.addEventListener('click', function () {
+      challengeMode = null;
       trackCodeInput.value = randomCode();
       if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
     });
 
-    dailyBtn.addEventListener('click', function () {
-      var config = dailyConfig();
-
-      seriesMode = false;
-      raceTypeBtn.querySelector('.selected').classList.remove('selected');
-      raceTypeBtn.querySelector('[data-val="SINGLE"]').classList.add('selected');
-      singleConfigEl.style.display = '';
-      seriesConfigEl.style.display = 'none';
-      lapsLabel.textContent = 'LAPS';
-
-      trackCodeInput.value = config.code;
-
-      reversed = config.reversed;
-      dirToggleBtn.querySelector('.selected').classList.remove('selected');
-      dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
-
-      nightMode = config.nightMode;
-      modeToggleBtn.querySelector('.selected').classList.remove('selected');
-      modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
-
-      totalLaps = config.laps;
-      lapsValueEl.textContent = totalLaps;
-
-      if (gameState === 'menu') rebuildTrack(config.code);
+    menuTabToggle.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      menuTabToggle.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      if (btn.dataset.val === 'event') {
+        eventTab.style.display = '';
+        challengesTab.style.display = 'none';
+        challengeMode = null;
+      } else {
+        eventTab.style.display = 'none';
+        challengesTab.style.display = '';
+        renderChallengePreview();
+      }
     });
+
+    challengeModeToggle.addEventListener('click', function (e) {
+      var btn = e.target.closest('.seg-option');
+      if (!btn || btn.classList.contains('selected')) return;
+      challengeModeToggle.querySelector('.selected').classList.remove('selected');
+      btn.classList.add('selected');
+      renderChallengePreview();
+    });
+
+    function challengeConfigForMode(mode) {
+      if (mode === 'daily-race') return { type: 'race', config: dailyConfig() };
+      if (mode === 'daily-series') return { type: 'series', config: dailySeriesConfig() };
+      if (mode === 'weekly-race') return { type: 'race', config: weeklyRaceConfig() };
+      if (mode === 'weekly-series') return { type: 'series', config: weeklySeriesConfig() };
+      return null;
+    }
+
+    function loadChallengeConfig(mode) {
+      var info = challengeConfigForMode(mode);
+      if (!info) return;
+      challengeMode = mode;
+
+      if (info.type === 'race') {
+        seriesMode = false;
+        reversed = info.config.reversed;
+        nightMode = info.config.nightMode;
+        totalLaps = info.config.laps;
+        currentTrackCode = info.config.code;
+        if (gameState === 'menu') rebuildTrack(info.config.code);
+      } else {
+        seriesMode = true;
+        stageCount = info.config.stageCount;
+        for (var i = 0; i < info.config.stages.length; i++) {
+          stageConfigs[i] = {
+            code: info.config.stages[i].code,
+            reversed: info.config.stages[i].reversed,
+            nightMode: info.config.stages[i].nightMode
+          };
+        }
+        totalLaps = info.config.laps;
+        if (gameState === 'menu') rebuildTrack(info.config.stages[0].code);
+      }
+    }
+
+    function renderChallengePreview() {
+      var mode = challengeModeToggle.querySelector('.selected').dataset.val;
+
+      loadChallengeConfig(mode);
+
+      var info = challengeConfigForMode(mode);
+      challengePreviewEl.innerHTML = '';
+
+      var tracksDiv = document.createElement('div');
+      tracksDiv.className = 'challenge-preview-tracks';
+
+      if (info.type === 'race') {
+        var stage = document.createElement('div');
+        stage.className = 'challenge-preview-stage';
+        stage.innerHTML = generateTrackSVG(info.config.code);
+        var desc = document.createElement('div');
+        desc.className = 'challenge-preview-stage-info';
+        desc.textContent = (info.config.reversed ? 'REV' : 'FWD') + ' \u00B7 ' +
+          (info.config.nightMode ? 'NIGHT' : 'DAY');
+        stage.appendChild(desc);
+        tracksDiv.appendChild(stage);
+        challengePreviewEl.appendChild(tracksDiv);
+
+        var summary = document.createElement('div');
+        summary.className = 'challenge-preview-summary';
+        summary.textContent = info.config.laps + (info.config.laps === 1 ? ' LAP' : ' LAPS');
+        challengePreviewEl.appendChild(summary);
+      } else {
+        for (var i = 0; i < info.config.stages.length; i++) {
+          var s = info.config.stages[i];
+          var stageEl = document.createElement('div');
+          stageEl.className = 'challenge-preview-stage';
+          stageEl.innerHTML = generateTrackSVG(s.code);
+          var num = document.createElement('div');
+          num.className = 'challenge-preview-stage-num';
+          num.textContent = '#' + (i + 1);
+          stageEl.appendChild(num);
+          var inf = document.createElement('div');
+          inf.className = 'challenge-preview-stage-info';
+          inf.textContent = (s.reversed ? 'REV' : 'FWD') + ' \u00B7 ' +
+            (s.nightMode ? 'NIGHT' : 'DAY');
+          stageEl.appendChild(inf);
+          tracksDiv.appendChild(stageEl);
+        }
+        challengePreviewEl.appendChild(tracksDiv);
+
+        var summary = document.createElement('div');
+        summary.className = 'challenge-preview-summary';
+        summary.textContent = info.config.stageCount + ' stages \u00B7 ' +
+          info.config.laps + (info.config.laps === 1 ? ' lap' : ' laps') + ' per stage';
+        challengePreviewEl.appendChild(summary);
+      }
+    }
 
     lapsMinusBtn.addEventListener('click', function () {
       if (totalLaps > 1) {
         totalLaps--;
         lapsValueEl.textContent = totalLaps;
+        challengeMode = null;
         if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
       }
     });
@@ -1185,6 +1784,7 @@
       if (totalLaps < 20) {
         totalLaps++;
         lapsValueEl.textContent = totalLaps;
+        challengeMode = null;
         if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
       }
     });
@@ -1210,6 +1810,7 @@
       btn.classList.add('selected');
       reversed = btn.dataset.val === 'REV';
       dirValueEl.textContent = reversed ? 'REV' : 'FWD';
+      challengeMode = null;
       if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
     });
 
@@ -1220,6 +1821,7 @@
       btn.classList.add('selected');
       nightMode = btn.dataset.val === 'NIGHT';
       modeValueEl.textContent = nightMode ? 'NIGHT' : 'DAY';
+      challengeMode = null;
     });
 
     raceTypeBtn.addEventListener('click', function (e) {
@@ -1227,6 +1829,7 @@
       if (!btn || btn.classList.contains('selected')) return;
       raceTypeBtn.querySelector('.selected').classList.remove('selected');
       btn.classList.add('selected');
+      challengeMode = null;
       seriesMode = btn.dataset.val === 'SERIES';
       raceTypeValue.textContent = seriesMode ? 'SERIES' : 'SINGLE';
       singleConfigEl.style.display = seriesMode ? 'none' : '';
@@ -1240,6 +1843,7 @@
       if (stageCount > 2) {
         stageCount--;
         stagesValueEl.textContent = stageCount;
+        challengeMode = null;
         buildStageList();
       }
     });
@@ -1248,11 +1852,13 @@
       if (stageCount < 5) {
         stageCount++;
         stagesValueEl.textContent = stageCount;
+        challengeMode = null;
         buildStageList();
       }
     });
 
     rngAllBtn.addEventListener('click', function () {
+      challengeMode = null;
       for (var i = 0; i < stageCount; i++) {
         stageConfigs[i].code = randomCode();
         stageConfigs[i].reversed = Math.random() > 0.5;
@@ -1277,6 +1883,45 @@
 
     settingsBackEl.addEventListener('click', function () {
       hideSettings();
+    });
+
+    authForm.addEventListener('submit', handleAuthSubmit);
+    authClose.addEventListener('click', hideAuthPanel);
+    logoutBtn.addEventListener('click', function () {
+      clearAuth();
+      session = GuestSession;
+      updateAccountBar();
+    });
+    loginBtn.addEventListener('click', function () {
+      showAuthPanel();
+    });
+
+    leaderboardBtn.addEventListener('click', function () {
+      leaderboardFrom = 'results';
+      resultsEl.style.display = 'none';
+      showLeaderboard();
+    });
+    leaderboardMenuBtn.addEventListener('click', function () {
+      if (gameState !== 'menu') return;
+      leaderboardFrom = 'menu';
+      showLeaderboardSelect();
+    });
+    leaderboardSelectEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('.lb-select-btn');
+      if (!btn) return;
+      showLeaderboardForChallenge(btn.dataset.challenge);
+      leaderboardEl.style.display = 'flex';
+    });
+    leaderboardBackEl.addEventListener('click', function () {
+      if (leaderboardFrom === 'menu' && leaderboardEntriesEl.style.display !== 'none') {
+        leaderboardEntriesEl.style.display = 'none';
+        leaderboardSelectEl.style.display = '';
+        return;
+      }
+      hideLeaderboard();
+      if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
+      else overlay.classList.remove('hidden');
+      leaderboardFrom = null;
     });
 
     patternOptionsEl.addEventListener('click', function (e) {
@@ -1491,7 +2136,7 @@
       var isFinalStage = currentStageIndex >= stageCount - 1;
 
       if (isFinalStage) {
-        resultsH2.textContent = 'SERIES COMPLETE';
+        resultsH2.textContent = (challengeMode ? challengeLabel(challengeMode) : 'SERIES') + ' COMPLETE';
         var totalTime = 0;
         for (var s = 0; s < seriesResults.length; s++) totalTime += seriesResults[s].time;
         resultsTrackText.textContent = stageCount + ' stages \u00B7 ' + formatTime(totalTime);
@@ -1507,6 +2152,15 @@
           resultsList.appendChild(stageLi);
         }
         promptEl.textContent = 'ENTER Retry  \u00B7  ESC Menu';
+
+        if (challengeMode && isLoggedIn()) {
+          var key = challengeKey(challengeMode);
+          if (key) {
+            apiRequest('POST', '/api/challenge', {
+              challenge_key: key, time_ms: totalTime
+            }).catch(function () {});
+          }
+        }
       } else {
         resultsH2.textContent = 'STAGE ' + (currentStageIndex + 1) + ' COMPLETE';
         resultsTrackText.textContent = formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps);
@@ -1536,7 +2190,7 @@
         promptEl.textContent = 'Press ENTER for Stage ' + (currentStageIndex + 2);
       }
     } else {
-      resultsH2.textContent = 'RACE COMPLETE';
+      resultsH2.textContent = (challengeMode ? challengeLabel(challengeMode) : 'RACE') + ' COMPLETE';
       resultsTrackText.textContent = formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps);
       copyTrackBtn.style.display = '';
       shareBtn.style.display = '';
@@ -1642,6 +2296,8 @@
     var closers = lastRaceWasRecord ? SHARE_CLOSERS_RECORD : SHARE_CLOSERS;
     var lines = [pick(openers), ''];
 
+    if (challengeMode) lines.push(challengeLabel(challengeMode));
+
     if (seriesMode) {
       var totalTime = 0;
       for (var s = 0; s < seriesResults.length; s++) totalTime += seriesResults[s].time;
@@ -1695,13 +2351,14 @@
     seriesResults = [];
     if (seriesMode) {
       rebuildTrack(stageConfigs[0].code);
+    } else if (challengeMode) {
+      rebuildTrack(currentTrackCode);
     } else {
       rebuildTrack(trackCodeInput.value);
     }
   }
 
-  function showRecords() {
-    var records = getAllBestTimes();
+  function renderRecords(records) {
     recordsListEl.innerHTML = '';
 
     if (records.length === 0) {
@@ -1766,14 +2423,22 @@
         recordsListEl.appendChild(card);
       }
     }
+  }
 
+  function showRecords() {
+    recordsListEl.innerHTML = '';
     overlay.classList.add('hidden');
     recordsEl.classList.remove('hidden');
     recordsVisible = true;
+
+    session.getAllBestTimes(function (records) {
+      renderRecords(records);
+    });
   }
 
   function retryRecord(rec) {
     seriesMode = false;
+    challengeMode = null;
     reversed = rec.reversed;
     nightMode = rec.nightMode;
     totalLaps = rec.laps;
@@ -2384,6 +3049,9 @@
 
   // ── Init ──────────────────────────────────────────────────────────
   function init() {
+    loadAuth();
+    updateAccountBar();
+
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x5d8a4a);
 
