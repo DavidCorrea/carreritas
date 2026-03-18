@@ -634,7 +634,8 @@
       min-width: 280px;
     }
     #auth-form input[type="text"],
-    #auth-form input[type="password"] {
+    #auth-form input[type="password"],
+    #auth-country {
       width: 100%;
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.12);
@@ -644,7 +645,8 @@
       border-radius: 5px; outline: none;
       transition: border-color 0.2s;
     }
-    #auth-form input:focus {
+    #auth-country option { background: #1a1a2e; color: #fff; }
+    #auth-form input:focus, #auth-country:focus {
       border-color: #4ecdc4;
       box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
     }
@@ -731,6 +733,11 @@
     .lb-entry.lb-pos-2 .lb-rank { color: rgba(78, 205, 196, 0.7); }
     .lb-entry.lb-pos-3 { background: rgba(78, 205, 196, 0.04); border-color: rgba(78, 205, 196, 0.10); }
     .lb-entry.lb-pos-3 .lb-rank { color: rgba(78, 205, 196, 0.5); }
+    .lb-country {
+      font-size: 20px;
+      min-width: 28px; text-align: center;
+      line-height: 1;
+    }
     .lb-name {
       color: rgba(255, 255, 255, 0.7);
       font-size: 14px; flex: 1;
@@ -747,23 +754,6 @@
       color: rgba(255, 255, 255, 0.25);
       font-family: "SF Mono", Monaco, "Courier New", monospace;
       font-size: 14px; margin-top: 16px; text-align: center;
-    }
-    #leaderboard-select {
-      display: flex; flex-direction: column; gap: 6px; min-width: 300px;
-    }
-    .lb-select-btn {
-      padding: 12px 24px;
-      font-size: 14px; letter-spacing: 3px; font-weight: 600;
-      font-family: "SF Mono", Monaco, "Courier New", monospace;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 5px;
-      color: rgba(255, 255, 255, 0.5);
-      cursor: pointer; transition: all 0.15s;
-    }
-    .lb-select-btn:hover {
-      border-color: #4ecdc4; color: #4ecdc4;
-      background: rgba(78, 205, 196, 0.08);
     }
   </style>
 </head>
@@ -792,6 +782,7 @@
     <form id="auth-form" autocomplete="off">
       <input type="text" id="auth-username" placeholder="Username" maxlength="20" spellcheck="false" autocomplete="off">
       <input type="password" id="auth-password" placeholder="Password" autocomplete="off">
+      <select id="auth-country" style="display:none;"></select>
       <button type="submit" class="auth-submit" id="auth-submit-btn">LOGIN</button>
     </form>
     <p id="auth-error"></p>
@@ -873,9 +864,9 @@
         </div>
         <hr class="menu-divider" style="margin-bottom:20px;">
         <div id="challenge-preview"></div>
+        <button id="leaderboard-menu-btn" type="button" class="challenge-lb-btn">LEADERBOARD</button>
       </div>
       <p class="start-prompt">Press ENTER to start</p>
-      <button id="leaderboard-menu-btn" type="button" class="challenge-lb-btn">LEADERBOARD</button>
     </div>
     <a href="https://github.com/DavidCorrea/carreritas" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
@@ -899,13 +890,7 @@
 
   <div id="leaderboard">
     <h2>LEADERBOARD</h2>
-    <div id="leaderboard-select">
-      <button type="button" class="lb-select-btn" data-challenge="daily-race">DAILY RACE</button>
-      <button type="button" class="lb-select-btn" data-challenge="daily-series">DAILY SERIES</button>
-      <button type="button" class="lb-select-btn" data-challenge="weekly-race">WEEKLY RACE</button>
-      <button type="button" class="lb-select-btn" data-challenge="weekly-series">WEEKLY SERIES</button>
-    </div>
-    <div id="leaderboard-entries" style="display:none;">
+    <div id="leaderboard-entries">
       <p id="leaderboard-track" style="color:rgba(255,255,255,0.35); font-size:14px; font-family:'SF Mono',Monaco,'Courier New',monospace; letter-spacing:3px; margin-bottom:20px; text-align:center;"></p>
       <div id="leaderboard-list"></div>
     </div>

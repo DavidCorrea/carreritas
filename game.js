@@ -163,6 +163,7 @@
   var authTitle = document.getElementById('auth-title');
   var authUsernameInput = document.getElementById('auth-username');
   var authPasswordInput = document.getElementById('auth-password');
+  var authCountrySelect = document.getElementById('auth-country');
   var authSubmitBtn = document.getElementById('auth-submit-btn');
   var authError = document.getElementById('auth-error');
   var authSwitch = document.getElementById('auth-switch');
@@ -175,8 +176,6 @@
   var settingsEl = document.getElementById('settings');
   var settingsBtn = document.getElementById('settings-btn');
   var leaderboardMenuBtn = document.getElementById('leaderboard-menu-btn');
-  var leaderboardSelectEl = document.getElementById('leaderboard-select');
-  var leaderboardEntriesEl = document.getElementById('leaderboard-entries');
   var settingsBackEl = document.getElementById('settings-back');
   var colorPrimaryEl = document.getElementById('color-primary');
   var colorSecondaryEl = document.getElementById('color-secondary');
@@ -375,6 +374,7 @@
   var AUTH_KEY = 'carreritas_auth';
   var authToken = null;
   var authUsername = null;
+  var authCountry = null;
   var authIsRegister = false;
 
   function loadAuth() {
@@ -383,24 +383,248 @@
       if (saved && saved.token && saved.username) {
         authToken = saved.token;
         authUsername = saved.username;
+        authCountry = saved.country || null;
         session = UserSession;
       }
     } catch (_) {}
   }
 
-  function persistAuth(token, username) {
+  function persistAuth(token, username, country) {
     authToken = token;
     authUsername = username;
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ token: token, username: username }));
+    authCountry = country || null;
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ token: token, username: username, country: country || null }));
   }
 
   function clearAuth() {
     authToken = null;
     authUsername = null;
+    authCountry = null;
     localStorage.removeItem(AUTH_KEY);
   }
 
   function isLoggedIn() { return !!authToken; }
+
+  var COUNTRIES = [
+    ['AF', 'Afghanistan'],
+    ['AL', 'Albania'],
+    ['DZ', 'Algeria'],
+    ['AD', 'Andorra'],
+    ['AO', 'Angola'],
+    ['AG', 'Antigua and Barbuda'],
+    ['AR', 'Argentina'],
+    ['AM', 'Armenia'],
+    ['AU', 'Australia'],
+    ['AT', 'Austria'],
+    ['AZ', 'Azerbaijan'],
+    ['BS', 'Bahamas'],
+    ['BH', 'Bahrain'],
+    ['BD', 'Bangladesh'],
+    ['BB', 'Barbados'],
+    ['BY', 'Belarus'],
+    ['BE', 'Belgium'],
+    ['BZ', 'Belize'],
+    ['BJ', 'Benin'],
+    ['BT', 'Bhutan'],
+    ['BO', 'Bolivia'],
+    ['BA', 'Bosnia and Herzegovina'],
+    ['BW', 'Botswana'],
+    ['BR', 'Brazil'],
+    ['BN', 'Brunei'],
+    ['BG', 'Bulgaria'],
+    ['BF', 'Burkina Faso'],
+    ['BI', 'Burundi'],
+    ['CV', 'Cabo Verde'],
+    ['KH', 'Cambodia'],
+    ['CM', 'Cameroon'],
+    ['CA', 'Canada'],
+    ['CF', 'Central African Republic'],
+    ['TD', 'Chad'],
+    ['CL', 'Chile'],
+    ['CN', 'China'],
+    ['CO', 'Colombia'],
+    ['KM', 'Comoros'],
+    ['CG', 'Congo (Congo-Brazzaville)'],
+    ['CD', 'Democratic Republic of the Congo'],
+    ['CR', 'Costa Rica'],
+    ['HR', 'Croatia'],
+    ['CU', 'Cuba'],
+    ['CY', 'Cyprus'],
+    ['CZ', 'Czechia (Czech Republic)'],
+    ['DK', 'Denmark'],
+    ['DJ', 'Djibouti'],
+    ['DM', 'Dominica'],
+    ['DO', 'Dominican Republic'],
+    ['EC', 'Ecuador'],
+    ['EG', 'Egypt'],
+    ['SV', 'El Salvador'],
+    ['GQ', 'Equatorial Guinea'],
+    ['ER', 'Eritrea'],
+    ['EE', 'Estonia'],
+    ['SZ', 'Eswatini'],
+    ['ET', 'Ethiopia'],
+    ['FJ', 'Fiji'],
+    ['FI', 'Finland'],
+    ['FR', 'France'],
+    ['GA', 'Gabon'],
+    ['GM', 'Gambia'],
+    ['GE', 'Georgia'],
+    ['DE', 'Germany'],
+    ['GH', 'Ghana'],
+    ['GR', 'Greece'],
+    ['GD', 'Grenada'],
+    ['GT', 'Guatemala'],
+    ['GN', 'Guinea'],
+    ['GW', 'Guinea-Bissau'],
+    ['GY', 'Guyana'],
+    ['HT', 'Haiti'],
+    ['HN', 'Honduras'],
+    ['HU', 'Hungary'],
+    ['IS', 'Iceland'],
+    ['IN', 'India'],
+    ['ID', 'Indonesia'],
+    ['IR', 'Iran'],
+    ['IQ', 'Iraq'],
+    ['IE', 'Ireland'],
+    ['IL', 'Israel'],
+    ['IT', 'Italy'],
+    ['JM', 'Jamaica'],
+    ['JP', 'Japan'],
+    ['JO', 'Jordan'],
+    ['KZ', 'Kazakhstan'],
+    ['KE', 'Kenya'],
+    ['KI', 'Kiribati'],
+    ['KW', 'Kuwait'],
+    ['KG', 'Kyrgyzstan'],
+    ['LA', 'Laos'],
+    ['LV', 'Latvia'],
+    ['LB', 'Lebanon'],
+    ['LS', 'Lesotho'],
+    ['LR', 'Liberia'],
+    ['LY', 'Libya'],
+    ['LI', 'Liechtenstein'],
+    ['LT', 'Lithuania'],
+    ['LU', 'Luxembourg'],
+    ['MG', 'Madagascar'],
+    ['MW', 'Malawi'],
+    ['MY', 'Malaysia'],
+    ['MV', 'Maldives'],
+    ['ML', 'Mali'],
+    ['MT', 'Malta'],
+    ['MH', 'Marshall Islands'],
+    ['MR', 'Mauritania'],
+    ['MU', 'Mauritius'],
+    ['MX', 'Mexico'],
+    ['FM', 'Micronesia'],
+    ['MD', 'Moldova'],
+    ['MC', 'Monaco'],
+    ['MN', 'Mongolia'],
+    ['ME', 'Montenegro'],
+    ['MA', 'Morocco'],
+    ['MZ', 'Mozambique'],
+    ['MM', 'Myanmar (Burma)'],
+    ['NA', 'Namibia'],
+    ['NR', 'Nauru'],
+    ['NP', 'Nepal'],
+    ['NL', 'Netherlands'],
+    ['NZ', 'New Zealand'],
+    ['NI', 'Nicaragua'],
+    ['NE', 'Niger'],
+    ['NG', 'Nigeria'],
+    ['KP', 'North Korea'],
+    ['MK', 'North Macedonia'],
+    ['NO', 'Norway'],
+    ['OM', 'Oman'],
+    ['PK', 'Pakistan'],
+    ['PW', 'Palau'],
+    ['PS', 'Palestine'],
+    ['PA', 'Panama'],
+    ['PG', 'Papua New Guinea'],
+    ['PY', 'Paraguay'],
+    ['PE', 'Peru'],
+    ['PH', 'Philippines'],
+    ['PL', 'Poland'],
+    ['PT', 'Portugal'],
+    ['QA', 'Qatar'],
+    ['RO', 'Romania'],
+    ['RU', 'Russia'],
+    ['RW', 'Rwanda'],
+    ['KN', 'Saint Kitts and Nevis'],
+    ['LC', 'Saint Lucia'],
+    ['VC', 'Saint Vincent and the Grenadines'],
+    ['WS', 'Samoa'],
+    ['SM', 'San Marino'],
+    ['ST', 'Sao Tome and Principe'],
+    ['SA', 'Saudi Arabia'],
+    ['SN', 'Senegal'],
+    ['RS', 'Serbia'],
+    ['SC', 'Seychelles'],
+    ['SL', 'Sierra Leone'],
+    ['SG', 'Singapore'],
+    ['SK', 'Slovakia'],
+    ['SI', 'Slovenia'],
+    ['SB', 'Solomon Islands'],
+    ['SO', 'Somalia'],
+    ['ZA', 'South Africa'],
+    ['KR', 'South Korea'],
+    ['SS', 'South Sudan'],
+    ['ES', 'Spain'],
+    ['LK', 'Sri Lanka'],
+    ['SD', 'Sudan'],
+    ['SR', 'Suriname'],
+    ['SE', 'Sweden'],
+    ['CH', 'Switzerland'],
+    ['SY', 'Syria'],
+    ['TW', 'Taiwan'],
+    ['TJ', 'Tajikistan'],
+    ['TZ', 'Tanzania'],
+    ['TH', 'Thailand'],
+    ['TL', 'Timor-Leste'],
+    ['TG', 'Togo'],
+    ['TO', 'Tonga'],
+    ['TT', 'Trinidad and Tobago'],
+    ['TN', 'Tunisia'],
+    ['TR', 'Turkey'],
+    ['TM', 'Turkmenistan'],
+    ['TV', 'Tuvalu'],
+    ['UG', 'Uganda'],
+    ['UA', 'Ukraine'],
+    ['AE', 'United Arab Emirates'],
+    ['GB', 'United Kingdom'],
+    ['US', 'United States'],
+    ['UY', 'Uruguay'],
+    ['UZ', 'Uzbekistan'],
+    ['VU', 'Vanuatu'],
+    ['VA', 'Vatican City'],
+    ['VE', 'Venezuela'],
+    ['VN', 'Vietnam'],
+    ['YE', 'Yemen'],
+    ['ZM', 'Zambia'],
+    ['ZW', 'Zimbabwe'],
+    ['XK', 'Kosovo']
+  ];
+
+  function countryFlag(code) {
+    if (!code || code.length !== 2) return '';
+    return String.fromCodePoint(
+      code.charCodeAt(0) - 65 + 0x1F1E6,
+      code.charCodeAt(1) - 65 + 0x1F1E6
+    );
+  }
+
+  function populateCountrySelect() {
+    var opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Select country';
+    authCountrySelect.appendChild(opt);
+    for (var i = 0; i < COUNTRIES.length; i++) {
+      var o = document.createElement('option');
+      o.value = COUNTRIES[i][0];
+      o.textContent = countryFlag(COUNTRIES[i][0]) + ' ' + COUNTRIES[i][1];
+      authCountrySelect.appendChild(o);
+    }
+  }
+  populateCountrySelect();
 
   function apiRequest(method, path, body) {
     var opts = {
@@ -427,6 +651,8 @@
     authError.textContent = '';
     authUsernameInput.value = '';
     authPasswordInput.value = '';
+    authCountrySelect.value = '';
+    authCountrySelect.style.display = 'none';
     authEl.classList.add('visible');
     document.getElementById('auth-switch').addEventListener('click', toggleAuthMode);
     authUsernameInput.focus();
@@ -443,17 +669,19 @@
       authTitle.textContent = 'REGISTER';
       authSubmitBtn.textContent = 'REGISTER';
       authToggleText.innerHTML = 'Have an account? <a id="auth-switch">Login</a>';
+      authCountrySelect.style.display = '';
     } else {
       authTitle.textContent = 'LOGIN';
       authSubmitBtn.textContent = 'LOGIN';
       authToggleText.innerHTML = 'No account? <a id="auth-switch">Register</a>';
+      authCountrySelect.style.display = 'none';
     }
     document.getElementById('auth-switch').addEventListener('click', toggleAuthMode);
   }
 
   function updateAccountBar() {
     if (isLoggedIn()) {
-      accountUsername.textContent = authUsername;
+      accountUsername.textContent = (authCountry ? countryFlag(authCountry) + ' ' : '') + authUsername;
       loginBtn.style.display = 'none';
       logoutBtn.style.display = '';
     } else {
@@ -468,16 +696,19 @@
     var username = authUsernameInput.value.trim();
     var password = authPasswordInput.value;
     if (!username || !password) { authError.textContent = 'Fill in both fields'; return; }
+    if (authIsRegister && !authCountrySelect.value) { authError.textContent = 'Select a country'; return; }
 
     var endpoint = authIsRegister ? '/api/register' : '/api/login';
     authSubmitBtn.disabled = true;
     authError.textContent = '';
 
-    apiRequest('POST', endpoint, { username: username, password: password })
+    var body = { username: username, password: password };
+    if (authIsRegister && authCountrySelect.value) body.country = authCountrySelect.value;
+    apiRequest('POST', endpoint, body)
       .then(function (data) {
         authSubmitBtn.disabled = false;
         if (data.error) { authError.textContent = data.error; return; }
-        persistAuth(data.token, data.username);
+        persistAuth(data.token, data.username, data.country);
         session = UserSession;
         hideAuthPanel();
         updateAccountBar();
@@ -498,44 +729,7 @@
       });
   }
 
-  // ── MOCK: remove this block to restore real leaderboards ──
-  var MOCK_LB = true;
-  var mockNames = ['speedfreak', 'turbokid', 'driftlord', 'nitrocat', 'blazer99', 'ghostrider', 'apexwolf', 'trackhawk', 'burnout_x', 'revhead', 'slipstream', 'railgun'];
-  var mockLeaderboardView = null;
-  function mockEntries(count, baseTime) {
-    var entries = [];
-    for (var i = 0; i < count; i++) {
-      entries.push({ username: mockNames[i], time_ms: baseTime + i * 1200 + Math.floor(Math.random() * 800) });
-    }
-    return entries;
-  }
-  function mockData(mode) {
-    var me = authUsername || 'you';
-    if (mode === 'daily-race') {
-      var entries = mockEntries(10, 22400);
-      entries[0].username = me;
-      return { entries: entries };
-    }
-    if (mode === 'daily-series') {
-      var entries = mockEntries(10, 68000);
-      entries[2].username = me;
-      return { entries: entries };
-    }
-    if (mode === 'weekly-race') {
-      var entries = mockEntries(10, 45000);
-      entries[9].username = me;
-      return { entries: entries };
-    }
-    if (mode === 'weekly-series') {
-      var entries = mockEntries(10, 120000);
-      return { entries: entries, user_entry: { username: me, time_ms: 158340, rank: 23 } };
-    }
-    return { entries: mockEntries(5, 30000) };
-  }
-  // ── END MOCK ──
-
   function fetchLeaderboard(code, laps, rev, night, callback) {
-    if (MOCK_LB) { callback(mockData(mockLeaderboardView)); return; }
     var qs = '?track_code=' + encodeURIComponent(code)
            + '&laps=' + laps
            + '&reversed=' + !!rev
@@ -546,7 +740,6 @@
   }
 
   function fetchChallengeLeaderboard(key, callback) {
-    if (MOCK_LB) { callback(mockData(mockLeaderboardView)); return; }
     apiRequest('GET', '/api/challenge?challenge_key=' + encodeURIComponent(key)).then(function (data) {
       callback(data);
     }).catch(function () { callback({ entries: [] }); });
@@ -563,6 +756,13 @@
     rankEl.className = 'lb-rank';
     rankEl.textContent = rank + '.';
     row.appendChild(rankEl);
+
+    if (entry.country) {
+      var countryEl = document.createElement('span');
+      countryEl.className = 'lb-country';
+      countryEl.textContent = countryFlag(entry.country);
+      row.appendChild(countryEl);
+    }
 
     var name = document.createElement('span');
     name.className = 'lb-name';
@@ -600,18 +800,8 @@
     }
   }
 
-  function showLeaderboardSelect() {
-    leaderboardSelectEl.style.display = '';
-    leaderboardEntriesEl.style.display = 'none';
-    overlay.classList.add('hidden');
-    leaderboardEl.style.display = 'flex';
-  }
-
   function showLeaderboardForChallenge(mode) {
-    leaderboardSelectEl.style.display = 'none';
-    leaderboardEntriesEl.style.display = '';
     leaderboardListEl.innerHTML = '';
-    mockLeaderboardView = mode;
 
     var label = challengeLabel(mode);
     var key = challengeKey(mode);
@@ -628,8 +818,6 @@
   }
 
   function showLeaderboardForCurrentTrack() {
-    leaderboardSelectEl.style.display = 'none';
-    leaderboardEntriesEl.style.display = '';
     leaderboardListEl.innerHTML = '';
     var desc = formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps);
     leaderboardTrackEl.textContent = desc;
@@ -637,8 +825,6 @@
   }
 
   function showLeaderboard() {
-    leaderboardSelectEl.style.display = 'none';
-    leaderboardEntriesEl.style.display = '';
     leaderboardListEl.innerHTML = '';
 
     if (challengeMode) {
@@ -1261,6 +1447,7 @@
         });
       }
     });
+    ghostMesh.visible = false;
   }
 
   function updateGhost() {
@@ -1563,15 +1750,10 @@
         if (authEl.classList.contains('visible')) {
           hideAuthPanel();
         } else if (leaderboardEl.style.display === 'flex') {
-          if (leaderboardFrom === 'menu' && leaderboardEntriesEl.style.display !== 'none') {
-            leaderboardEntriesEl.style.display = 'none';
-            leaderboardSelectEl.style.display = '';
-          } else {
-            hideLeaderboard();
-            if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
-            else overlay.classList.remove('hidden');
-            leaderboardFrom = null;
-          }
+          hideLeaderboard();
+          if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
+          else overlay.classList.remove('hidden');
+          leaderboardFrom = null;
         } else if (settingsVisible) {
           hideSettings();
         } else if (recordsVisible) {
@@ -1643,6 +1825,11 @@
         eventTab.style.display = '';
         challengesTab.style.display = 'none';
         challengeMode = null;
+        seriesMode = raceTypeBtn.querySelector('.selected').dataset.val === 'SERIES';
+        reversed = dirToggleBtn.querySelector('.selected').dataset.val === 'REV';
+        nightMode = modeToggleBtn.querySelector('.selected').dataset.val === 'NIGHT';
+        totalLaps = parseInt(lapsValueEl.textContent, 10);
+        if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
       } else {
         eventTab.style.display = 'none';
         challengesTab.style.display = '';
@@ -1880,20 +2067,12 @@
     leaderboardMenuBtn.addEventListener('click', function () {
       if (gameState !== 'menu') return;
       leaderboardFrom = 'menu';
-      showLeaderboardSelect();
-    });
-    leaderboardSelectEl.addEventListener('click', function (e) {
-      var btn = e.target.closest('.lb-select-btn');
-      if (!btn) return;
-      showLeaderboardForChallenge(btn.dataset.challenge);
+      var mode = challengeModeToggle.querySelector('.selected').dataset.val;
+      overlay.classList.add('hidden');
       leaderboardEl.style.display = 'flex';
+      showLeaderboardForChallenge(mode);
     });
     leaderboardBackEl.addEventListener('click', function () {
-      if (leaderboardFrom === 'menu' && leaderboardEntriesEl.style.display !== 'none') {
-        leaderboardEntriesEl.style.display = 'none';
-        leaderboardSelectEl.style.display = '';
-        return;
-      }
       hideLeaderboard();
       if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
       else overlay.classList.remove('hidden');
@@ -2039,6 +2218,7 @@
       currentTrackCode = stage.code;
       rebuildTrack(stage.code);
     }
+    if (ghostMesh) ghostMesh.visible = true;
     gameState = 'countdown';
     overlay.classList.add('hidden');
     hud.style.display = 'block';
@@ -2305,6 +2485,7 @@
     if (player) { scene.remove(player.mesh); player = null; }
     createPlayer();
     createGhost();
+    if (ghostMesh) ghostMesh.visible = true;
     gameState = 'countdown';
     overlay.classList.add('hidden');
     hud.style.display = 'block';
@@ -2403,6 +2584,7 @@
   }
 
   function showRecords() {
+    if (settingsVisible) hideSettings();
     recordsListEl.innerHTML = '';
     overlay.classList.add('hidden');
     recordsEl.classList.remove('hidden');
@@ -2588,6 +2770,7 @@
   }
 
   function showSettings() {
+    if (recordsVisible) hideRecords();
     colorPrimaryEl.value = carSettings.primaryColor;
     colorSecondaryEl.value = carSettings.secondaryColor;
     colorHeadlightsEl.value = carSettings.headlightsColor;
@@ -2617,6 +2800,7 @@
     previewDriveToggle.querySelector('[data-val="IDLE"]').classList.add('selected');
 
     overlay.classList.add('hidden');
+    accountBar.style.display = 'none';
     settingsEl.classList.remove('hidden');
     settingsBackEl.style.display = '';
     settingsVisible = true;
@@ -2647,6 +2831,7 @@
     }
     settingsEl.classList.add('hidden');
     settingsBackEl.style.display = 'none';
+    accountBar.style.display = '';
     overlay.classList.remove('hidden');
     settingsVisible = false;
   }
