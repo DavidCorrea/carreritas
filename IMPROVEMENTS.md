@@ -35,12 +35,12 @@ Award gold, silver, and bronze medals based on race times. Absolute thresholds a
 **Where:** new feature (needs user accounts and a time-recording backend)
 **Why it matters:** Adds progression and replayability — players have concrete goals beyond beating their own ghost.
 
-## Custom shared series
+## Custom shared series — leaderboards and invites
 
-Let users create a series (track codes, directions, modes, laps) and share it two ways: a public link anyone can open, or a direct invite to friends from their friend list. Friends race the same series and times are compared on a shared leaderboard for that series. The series config could be encoded in the URL (no backend needed for the config itself) but recording and comparing results across players requires user accounts and a backend.
+Series configs can now be shared via URL (`?s=` parameter with comma-separated descriptors). The remaining work is the social layer: direct invites to friends from a friend list, and a shared leaderboard that compares times across players for the same series. Recording and comparing results requires user accounts and a backend.
 
-**Where:** new feature (series config encoding could be client-side; leaderboard and invites need backend + user accounts + friend system)
-**Why it matters:** Turns the game into a social experience — players can challenge friends on courses they designed, either casually via link or directly via invite.
+**Where:** new feature (leaderboard and invites need backend + user accounts + friend system)
+**Why it matters:** The sharing link is in place — players can already challenge friends by sending a URL. Adding a leaderboard and invite system would close the loop by letting them compare results.
 
 ## Global rankings
 

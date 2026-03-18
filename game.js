@@ -110,6 +110,7 @@
   var recordAccum = 0;
   var bestReplay = null;
   var bestTime = null;
+  var lastRaceWasRecord = false;
 
   var hud = document.getElementById('hud');
   var lapDisplay = document.getElementById('lap-display');
@@ -125,6 +126,7 @@
   var resultsTrackCode = document.getElementById('results-track-code');
   var resultsTrackText = document.getElementById('results-track-text');
   var copyTrackBtn = document.getElementById('copy-track-btn');
+  var shareBtn = document.getElementById('share-btn');
   var trackCodeInput = document.getElementById('track-code-input');
   var randomBtn = document.getElementById('random-btn');
   var dailyBtn = document.getElementById('daily-btn');
@@ -701,6 +703,25 @@
     return out;
   }
 
+  function formatDescriptor(code, rev, night, laps) {
+    return code + ' ' + (rev ? 'R' : 'F') + (night ? 'N' : 'D') + laps;
+  }
+
+  function parseDescriptor(str) {
+    var parts = str.split(' ');
+    var result = { code: parts[0] || '' };
+    if (parts.length > 1) {
+      var meta = parts[1];
+      if (meta.charAt(0) === 'F') result.reversed = false;
+      else if (meta.charAt(0) === 'R') result.reversed = true;
+      if (meta.charAt(1) === 'D') result.nightMode = false;
+      else if (meta.charAt(1) === 'N') result.nightMode = true;
+      var lapNum = parseInt(meta.substring(2), 10);
+      if (lapNum > 0 && lapNum <= 20) result.laps = lapNum;
+    }
+    return result;
+  }
+
   function mulberry32(seed) {
     return function () {
       seed |= 0; seed = seed + 0x6D2B79F5 | 0;
@@ -941,13 +962,28 @@
       var input = document.createElement('input');
       input.className = 'stage-code';
       input.type = 'text';
-      input.maxLength = 18;
+      input.maxLength = 23;
       input.value = stageConfigs[i].code;
       input.spellcheck = false;
       input.autocomplete = 'off';
       (function (idx) {
         input.addEventListener('input', function (e) {
-          stageConfigs[idx].code = e.target.value;
+          var parsed = parseDescriptor(e.target.value);
+          stageConfigs[idx].code = parsed.code;
+          e.target.value = parsed.code;
+          var stageBlock = e.target.closest('.stage-block');
+          if (parsed.reversed !== undefined) {
+            stageConfigs[idx].reversed = parsed.reversed;
+            var dirSeg = stageBlock.querySelectorAll('.seg-control-sm')[0];
+            dirSeg.querySelector('.selected').classList.remove('selected');
+            dirSeg.querySelector('[data-val="' + (parsed.reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+          }
+          if (parsed.nightMode !== undefined) {
+            stageConfigs[idx].nightMode = parsed.nightMode;
+            var modeSeg = stageBlock.querySelectorAll('.seg-control-sm')[1];
+            modeSeg.querySelector('.selected').classList.remove('selected');
+            modeSeg.querySelector('[data-val="' + (parsed.nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+          }
         });
       })(i);
       topRow.appendChild(input);
@@ -959,16 +995,7 @@
       (function (idx, inp) {
         rngBtn.addEventListener('click', function () {
           stageConfigs[idx].code = randomCode();
-          stageConfigs[idx].reversed = Math.random() > 0.5;
-          stageConfigs[idx].nightMode = Math.random() > 0.5;
           inp.value = stageConfigs[idx].code;
-          var stageBlock = inp.closest('.stage-block');
-          var dirSeg = stageBlock.querySelectorAll('.seg-control-sm')[0];
-          dirSeg.querySelector('.selected').classList.remove('selected');
-          dirSeg.querySelector('[data-val="' + (stageConfigs[idx].reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
-          var modeSeg = stageBlock.querySelectorAll('.seg-control-sm')[1];
-          modeSeg.querySelector('.selected').classList.remove('selected');
-          modeSeg.querySelector('[data-val="' + (stageConfigs[idx].nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
         });
       })(i, input);
       topRow.appendChild(rngBtn);
@@ -1095,21 +1122,28 @@
     trackCodeInput.addEventListener('input', function () {
       clearTimeout(rebuildTimer);
       rebuildTimer = setTimeout(function () {
-        if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
+        var parsed = parseDescriptor(trackCodeInput.value);
+        if (parsed.reversed !== undefined) {
+          reversed = parsed.reversed;
+          dirToggleBtn.querySelector('.selected').classList.remove('selected');
+          dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+        }
+        if (parsed.nightMode !== undefined) {
+          nightMode = parsed.nightMode;
+          modeToggleBtn.querySelector('.selected').classList.remove('selected');
+          modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+        }
+        if (parsed.laps !== undefined) {
+          totalLaps = parsed.laps;
+          lapsValueEl.textContent = totalLaps;
+        }
+        trackCodeInput.value = parsed.code;
+        if (gameState === 'menu') rebuildTrack(parsed.code);
       }, 200);
     });
 
     randomBtn.addEventListener('click', function () {
       trackCodeInput.value = randomCode();
-
-      reversed = Math.random() > 0.5;
-      dirToggleBtn.querySelector('.selected').classList.remove('selected');
-      dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
-
-      nightMode = Math.random() > 0.5;
-      modeToggleBtn.querySelector('.selected').classList.remove('selected');
-      modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
-
       if (gameState === 'menu') rebuildTrack(trackCodeInput.value);
     });
 
@@ -1156,9 +1190,16 @@
     });
 
     copyTrackBtn.addEventListener('click', function () {
-      navigator.clipboard.writeText(currentTrackCode).then(function () {
+      navigator.clipboard.writeText(formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps)).then(function () {
         copyTrackBtn.textContent = '\u2713';
         setTimeout(function () { copyTrackBtn.innerHTML = '&#9112;'; }, 1500);
+      });
+    });
+
+    shareBtn.addEventListener('click', function () {
+      navigator.clipboard.writeText(buildShareText()).then(function () {
+        shareBtn.textContent = 'COPIED!';
+        setTimeout(function () { shareBtn.textContent = 'SHARE'; }, 1500);
       });
     });
 
@@ -1428,6 +1469,7 @@
 
     recording.push({ x: player.x, z: player.z, a: player.angle });
     var isNewBest = !bestTime || player.finishTime < bestTime;
+    lastRaceWasRecord = isNewBest;
     if (isNewBest) saveBest(currentTrackCode, player.finishTime, recording);
 
     var existingRecord = resultsEl.querySelector('.new-record');
@@ -1454,22 +1496,22 @@
         for (var s = 0; s < seriesResults.length; s++) totalTime += seriesResults[s].time;
         resultsTrackText.textContent = stageCount + ' stages \u00B7 ' + formatTime(totalTime);
         copyTrackBtn.style.display = 'none';
+        shareBtn.style.display = '';
 
         for (var s = 0; s < seriesResults.length; s++) {
           var sr = seriesResults[s];
           var stageLi = document.createElement('li');
           stageLi.className = 'lap-time';
-          var dirLabel = sr.reversed ? 'REV' : 'FWD';
-          var modeLabel = sr.nightMode ? 'NGT' : 'DAY';
-          stageLi.textContent = '#' + (s + 1) + '  ' + formatTime(sr.time) + '  ' + dirLabel + ' ' + modeLabel;
+          stageLi.textContent = '#' + (s + 1) + '  ' + formatTime(sr.time) + '  ' + formatDescriptor(sr.code, sr.reversed, sr.nightMode, totalLaps);
           if (sr.isNewBest) stageLi.className += ' lap-fastest';
           resultsList.appendChild(stageLi);
         }
         promptEl.textContent = 'ENTER Retry  \u00B7  ESC Menu';
       } else {
         resultsH2.textContent = 'STAGE ' + (currentStageIndex + 1) + ' COMPLETE';
-        resultsTrackText.textContent = currentTrackCode;
+        resultsTrackText.textContent = formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps);
         copyTrackBtn.style.display = '';
+        shareBtn.style.display = 'none';
 
         if (isNewBest) {
           var badge = document.createElement('p');
@@ -1481,7 +1523,6 @@
         var li = document.createElement('li');
         li.className = 'player';
         li.textContent = 'TIME  ' + formatTime(player.finishTime);
-        li.style.color = carSettings.primaryColor;
         resultsList.appendChild(li);
 
         var fastestLap = Math.min.apply(null, player.lapTimes);
@@ -1496,8 +1537,9 @@
       }
     } else {
       resultsH2.textContent = 'RACE COMPLETE';
-      resultsTrackText.textContent = currentTrackCode;
+      resultsTrackText.textContent = formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps);
       copyTrackBtn.style.display = '';
+      shareBtn.style.display = '';
 
       if (isNewBest) {
         var badge = document.createElement('p');
@@ -1509,7 +1551,6 @@
       var li = document.createElement('li');
       li.className = 'player';
       li.textContent = 'TIME  ' + formatTime(player.finishTime);
-      li.style.color = carSettings.primaryColor;
       resultsList.appendChild(li);
 
       var li2 = document.createElement('li');
@@ -1541,6 +1582,89 @@
     var sec = (s % 60).toFixed(2);
     if (sec < 10) sec = '0' + sec;
     return m + ':' + sec;
+  }
+
+  var SHARE_BASE = 'https://carreritas.vercel.app/';
+
+  function shareURL() {
+    if (seriesMode) {
+      var descs = [];
+      for (var i = 0; i < seriesResults.length; i++) {
+        var sr = seriesResults[i];
+        descs.push(formatDescriptor(sr.code, sr.reversed, sr.nightMode, totalLaps));
+      }
+      return SHARE_BASE + '?s=' + encodeURIComponent(descs.join(','));
+    }
+    return SHARE_BASE + '?t=' + encodeURIComponent(formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps));
+  }
+
+  var SHARE_OPENERS = [
+    'Just set this time.',
+    'Not bad, right?',
+    'Could\'ve been worse.',
+    'Not my best run... or is it?',
+    'Look at this.'
+  ];
+  var SHARE_OPENERS_RECORD = [
+    'New record. No big deal.',
+    'Just casually dropped a record.',
+    'Personal best. I make it look easy.',
+    'Record broken. Again.',
+    'Peak performance.',
+    'Cinema.',
+    'This is giving main character energy.',
+    'No cap, that was clean.',
+    'Lowkey ate that.',
+    'Slay.'
+  ];
+  var SHARE_CLOSERS = [
+    'Think you can beat me?',
+    'Your turn.',
+    'No pressure.',
+    'Your move.',
+    'Beat that.'
+  ];
+  var SHARE_CLOSERS_RECORD = [
+    'Good luck beating this.',
+    'Try to do better, I dare you.',
+    'I\'ll wait.',
+    'Don\'t even bother.',
+    'Set the bar. Your problem now.',
+    'It\'s giving unbeatable.',
+    'Rent free in the leaderboard.',
+    'Stay mad.'
+  ];
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function buildShareText() {
+    var openers = lastRaceWasRecord ? SHARE_OPENERS_RECORD : SHARE_OPENERS;
+    var closers = lastRaceWasRecord ? SHARE_CLOSERS_RECORD : SHARE_CLOSERS;
+    var lines = [pick(openers), ''];
+
+    if (seriesMode) {
+      var totalTime = 0;
+      for (var s = 0; s < seriesResults.length; s++) totalTime += seriesResults[s].time;
+      lines.push(stageCount + ' stages \u00B7 ' + formatTime(totalTime));
+      for (var s = 0; s < seriesResults.length; s++) {
+        var sr = seriesResults[s];
+        lines.push('#' + (s + 1) + '  ' + formatTime(sr.time));
+      }
+    } else {
+      lines.push('TIME  ' + formatTime(player.finishTime));
+      if (player.lapTimes.length > 1) {
+        var fastestLap = Math.min.apply(null, player.lapTimes);
+        for (var i = 0; i < player.lapTimes.length; i++) {
+          var marker = player.lapTimes[i] === fastestLap ? ' \u2605' : '';
+          lines.push('L' + (i + 1) + '  ' + formatTime(player.lapTimes[i]) + marker);
+        }
+      }
+    }
+
+    lines.push('');
+    lines.push(pick(closers));
+    lines.push(shareURL());
+    return lines.join('\n');
   }
 
   function restartCurrentMap() {
@@ -1609,7 +1733,7 @@
 
         var codeP = document.createElement('p');
         codeP.className = 'record-card-code';
-        codeP.textContent = rec.code;
+        codeP.textContent = formatDescriptor(rec.code, rec.reversed, rec.nightMode, rec.laps);
         info.appendChild(codeP);
 
         var row = document.createElement('div');
@@ -1619,21 +1743,6 @@
         time.className = 'record-time';
         time.textContent = formatTime(rec.time);
         row.appendChild(time);
-
-        var laps = document.createElement('span');
-        laps.className = 'record-laps';
-        laps.textContent = rec.laps + 'L';
-        row.appendChild(laps);
-
-        var dir = document.createElement('span');
-        dir.className = 'record-dir';
-        dir.textContent = rec.reversed ? 'REV' : 'FWD';
-        row.appendChild(dir);
-
-        var mode = document.createElement('span');
-        mode.className = 'record-mode';
-        mode.textContent = rec.nightMode ? 'NIGHT' : 'DAY';
-        row.appendChild(mode);
 
         if (rec.date) {
           var dateSpan = document.createElement('span');
@@ -2303,8 +2412,57 @@
     scene.add(ground);
 
     var startCode = randomCode();
+    var params = new URLSearchParams(window.location.search);
+    var sharedDescriptor = params.get('t');
+    var sharedSeries = params.get('s');
+    if (sharedSeries) {
+      var descs = sharedSeries.split(',');
+      stageCount = descs.length;
+      stagesValueEl.textContent = stageCount;
+      for (var i = 0; i < descs.length; i++) {
+        var parsed = parseDescriptor(descs[i]);
+        stageConfigs[i] = {
+          code: parsed.code,
+          reversed: parsed.reversed || false,
+          nightMode: parsed.nightMode || false
+        };
+        if (i === 0 && parsed.laps !== undefined) {
+          totalLaps = parsed.laps;
+          lapsValueEl.textContent = totalLaps;
+        }
+      }
+      seriesMode = true;
+      raceTypeBtn.querySelector('.selected').classList.remove('selected');
+      raceTypeBtn.querySelector('[data-val="SERIES"]').classList.add('selected');
+      singleConfigEl.style.display = 'none';
+      seriesConfigEl.style.display = '';
+      lapsLabel.textContent = 'LAPS PER STAGE';
+      startCode = stageConfigs[0].code;
+      buildStageList();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (sharedDescriptor) {
+      var parsed = parseDescriptor(sharedDescriptor);
+      startCode = parsed.code;
+      if (parsed.reversed !== undefined) {
+        reversed = parsed.reversed;
+        dirToggleBtn.querySelector('.selected').classList.remove('selected');
+        dirToggleBtn.querySelector('[data-val="' + (reversed ? 'REV' : 'FWD') + '"]').classList.add('selected');
+      }
+      if (parsed.nightMode !== undefined) {
+        nightMode = parsed.nightMode;
+        modeToggleBtn.querySelector('.selected').classList.remove('selected');
+        modeToggleBtn.querySelector('[data-val="' + (nightMode ? 'NIGHT' : 'DAY') + '"]').classList.add('selected');
+      }
+      if (parsed.laps !== undefined) {
+        totalLaps = parsed.laps;
+        lapsValueEl.textContent = totalLaps;
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     trackCodeInput.value = startCode;
-    for (var i = 0; i < stageConfigs.length; i++) stageConfigs[i].code = randomCode();
+    if (!sharedSeries) {
+      for (var i = 0; i < stageConfigs.length; i++) stageConfigs[i].code = randomCode();
+    }
     rebuildTrack(startCode);
     setupInput();
 

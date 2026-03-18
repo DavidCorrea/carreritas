@@ -342,6 +342,19 @@
       border-color: #4ecdc4; color: #4ecdc4;
       background: rgba(78, 205, 196, 0.08);
     }
+    #share-btn {
+      font-size: 13px; padding: 6px 18px; margin-top: 16px;
+      background: rgba(78, 205, 196, 0.10);
+      border: 1px solid rgba(78, 205, 196, 0.3);
+      color: rgba(78, 205, 196, 0.7);
+      border-radius: 5px; cursor: pointer;
+      font-family: "SF Mono", Monaco, "Courier New", monospace;
+      letter-spacing: 2px; transition: all 0.15s;
+    }
+    #share-btn:hover {
+      border-color: #4ecdc4; color: #4ecdc4;
+      background: rgba(78, 205, 196, 0.15);
+    }
     #results-list {
       list-style: none; color: #fff; font-size: 18px;
       font-family: "SF Mono", Monaco, "Courier New", monospace;
@@ -571,7 +584,7 @@
       <div id="single-config">
         <p class="track-label">TRACK CODE</p>
         <div class="track-input-row">
-          <input id="track-code-input" type="text" maxlength="18" value="" spellcheck="false" autocomplete="off">
+          <input id="track-code-input" type="text" maxlength="23" value="" spellcheck="false" autocomplete="off">
           <button id="random-btn" type="button">RNG</button>
           <button id="daily-btn" type="button">DAILY</button>
         </div>
@@ -631,6 +644,7 @@
     <h2>RACE COMPLETE</h2>
     <p id="results-track-code"><span id="results-track-text"></span><button id="copy-track-btn" type="button" title="Copy track code">&#9112;</button></p>
     <ul id="results-list"></ul>
+    <button id="share-btn" type="button" title="Share results">SHARE</button>
     <p class="start-prompt">ENTER Retry &middot; ESC Menu</p>
   </div>
 

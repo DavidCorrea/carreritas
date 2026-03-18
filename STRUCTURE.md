@@ -29,7 +29,8 @@ The file is organized into labeled sections:
 - **Lighting** — headlight beams, underglow mesh/light, glow effects. Beam shape derived from headlight shape setting
 - **Night mode** — 2D canvas overlay with headlight beam masking
 - **Main loop** — `requestAnimationFrame` loop dispatching to the current game state
-- **Init** — scene setup, renderer, ground plane, initial track build, resize handler
+- **Sharing** — share text builder with randomized opener/closer pools, URL generation for single races (`?t=`) and series (`?s=`)
+- **Init** — scene setup, renderer, ground plane, initial track build, URL parameter parsing, resize handler
 
 ## Conventions
 

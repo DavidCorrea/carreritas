@@ -4,6 +4,10 @@
 
 An 18-character string that deterministically generates a closed track shape. Each character's ASCII value maps to a radial distance at one of 18 evenly-spaced angles, which are smoothed and connected with a Catmull-Rom spline. The starting point of the track is shifted by an offset derived from the sum of all character codes in the string — different codes produce different start/finish positions. The same code always produces the same track and the same start position.
 
+## Track Descriptor
+
+A compact string that fully identifies a race configuration: track shape, direction, mode, and lap count. Format: `<18-char code> <F|R><D|N><laps>`. Example: `Ax!9kR#m2$pLqZ&w@f FD3` means forward, day, 3 laps. The space separator is safe because track codes use ASCII 33–126 (no spaces). Used consistently in results screens, the copy button, and best runs cards. Pasting a full descriptor into any track code input parses and applies all parts; pasting a bare 18-char code still works (missing parts keep current settings).
+
 ## Lap
 
 One full circuit around the track. The track is divided into 4 sectors; a lap counts when the player crosses all 4 sectors in order and returns to the finish sector.
@@ -49,6 +53,10 @@ Player-configurable car appearance, persisted in localStorage. Includes:
 
 Settings are previewed live on the current map. The settings UI includes a day/night toggle, camera mode selector, and an idle/running toggle. In running mode the car auto-drives along the track centerline so the player can see their car in motion. A cinematic "Showcase" camera mode activates by default when the settings panel opens, cycling through slow orbits and sweeps around the car with smooth transitions between shots.
 
+## Share
+
+After finishing a race or series, a Share button copies a formatted text to the clipboard. The text includes a randomized opener/closer (drawn from separate pools for regular runs vs. new records — record messages are more confident), the race times, and a link that loads the same track configuration. Single-race links use `?t=<descriptor>`. Series links use `?s=<descriptor>,<descriptor>,...` with one descriptor per stage. On page load, these URL parameters are parsed and applied, then cleaned from the address bar.
+
 ## Best Runs (Records)
 
-A panel that lists all personal best times stored in localStorage. Each entry shows the track preview (SVG), track code, time, lap count, direction, mode, and date. Players can retry any record directly, which loads the track configuration and starts a countdown.
+A panel that lists all personal best times stored in localStorage. Each entry shows the track preview (SVG), full track descriptor, time, and date. Players can retry any record directly, which loads the track configuration and starts a countdown.
