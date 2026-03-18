@@ -176,6 +176,7 @@
   var settingsEl = document.getElementById('settings');
   var settingsBtn = document.getElementById('settings-btn');
   var leaderboardMenuBtn = document.getElementById('leaderboard-menu-btn');
+  var challengeLbSubtitle = document.getElementById('challenge-lb-subtitle');
   var settingsBackEl = document.getElementById('settings-back');
   var colorPrimaryEl = document.getElementById('color-primary');
   var colorSecondaryEl = document.getElementById('color-secondary');
@@ -1411,6 +1412,89 @@
     return null;
   }
 
+  var challengeStats = {
+    empty: [
+      "No one\u2019s posted a time yet \u2014 be the first",
+      "Wide open \u2014 no times on the board",
+      "Unclaimed \u2014 set the pace",
+      "Ghost town \u2014 leave the first mark",
+      "Empty board \u2014 this one\u2019s yours",
+      "Zero entries \u2014 make history",
+      "Blank slate \u2014 someone\u2019s gotta go first",
+      "The board is cold \u2014 warm it up"
+    ],
+    notLoggedIn: [
+      "{n} on the board \u2014 log in to compete",
+      "{n} posted so far \u2014 log in to join",
+      "{n} in the mix \u2014 log in and show up",
+      "{n} already in \u2014 log in to challenge them",
+      "{n} on the clock \u2014 log in to post yours",
+      "The board has {n} \u2014 log in and make it {n}+1",
+      "{n} left their mark \u2014 log in to leave yours",
+      "{n} threw down \u2014 log in and answer"
+    ],
+    notParticipated: [
+      "{n} in and counting \u2014 jump in",
+      "{n} on the board \u2014 think you can hang?",
+      "{n} posted \u2014 yours isn\u2019t one yet",
+      "{n} showed up \u2014 where are you?",
+      "{n} already went for it \u2014 your turn",
+      "Board\u2019s got {n} \u2014 go add your name",
+      "{n} threw down a time \u2014 you in?",
+      "{n} and counting \u2014 don\u2019t just watch"
+    ],
+    first: [
+      "{n} in \u2014 you\u2019re on top",
+      "Leading the pack out of {n}",
+      "On top with {n} behind you",
+      "Crown is yours \u2014 {n} tried",
+      "Fastest out of {n} \u2014 hold it",
+      "{n} in your rearview",
+      "Untouched \u2014 {n} couldn\u2019t catch you",
+      "The one to beat out of {n}"
+    ],
+    ranked: [
+      "#{rank} of {n} \u2014 {taunt}",
+      "Sitting at #{rank} out of {n} \u2014 {taunt}",
+      "You\u2019re #{rank} of {n} \u2014 {taunt}",
+      "Clocked in at #{rank} of {n} \u2014 {taunt}",
+      "#{rank} out of {n} \u2014 {taunt}",
+      "Holding #{rank} in a field of {n} \u2014 {taunt}",
+      "Landed #{rank} of {n} \u2014 {taunt}",
+      "#{rank} with {n} on the board \u2014 {taunt}"
+    ]
+  };
+  var challengeTaunts = {
+    close: [
+      "almost there", "one push away", "podium\u2019s right there",
+      "so close", "one good lap away", "within striking distance",
+      "the top is right there", "can you smell it"
+    ],
+    mid: [
+      "room to climb", "not bad, not great", "warming up",
+      "middle of the pack", "decent but not done",
+      "solid start", "respectable", "keep pushing"
+    ],
+    far: [
+      "got some work to do", "long way up", "brave showing",
+      "it\u2019s the taking part that counts", "everyone starts somewhere",
+      "the only way is up", "character building", "shaking off the rust"
+    ]
+  };
+
+  function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function challengeStatsMessage(totalCount, userRank) {
+    if (totalCount === 0) return pickRandom(challengeStats.empty);
+    if (!isLoggedIn()) return pickRandom(challengeStats.notLoggedIn).replace('{n}', totalCount);
+    if (!userRank) return pickRandom(challengeStats.notParticipated).replace('{n}', totalCount);
+    if (userRank === 1) return pickRandom(challengeStats.first).replace('{n}', totalCount);
+    var ratio = userRank / totalCount;
+    var pool = ratio <= 0.2 ? challengeTaunts.close : ratio <= 0.5 ? challengeTaunts.mid : challengeTaunts.far;
+    return pickRandom(challengeStats.ranked)
+      .replace('{n}', totalCount).replace('{rank}', userRank).replace('{taunt}', pickRandom(pool));
+  }
+
   // ── Player ────────────────────────────────────────────────────────
   function createPlayer() {
     var start = getStartPosition();
@@ -1932,6 +2016,29 @@
           info.config.laps + (info.config.laps === 1 ? ' lap' : ' laps') + ' per stage';
         challengePreviewEl.appendChild(summary);
       }
+
+      challengeLbSubtitle.classList.remove('visible');
+      challengeLbSubtitle.querySelector('span').textContent = '';
+
+      var isSeries = mode === 'daily-series' || mode === 'weekly-series';
+      var fetchFn = isSeries
+        ? function (cb) { fetchChallengeLeaderboard(challengeKey(mode), cb); }
+        : function (cb) {
+            fetchLeaderboard(info.config.code, info.config.laps, info.config.reversed, info.config.nightMode, cb);
+          };
+
+      fetchFn(function (data) {
+        var total = data.total_count || 0;
+        var userRank = null;
+        if (isLoggedIn() && data.entries) {
+          for (var j = 0; j < data.entries.length; j++) {
+            if (data.entries[j].username === authUsername) { userRank = j + 1; break; }
+          }
+          if (!userRank && data.user_entry) userRank = data.user_entry.rank;
+        }
+        challengeLbSubtitle.querySelector('span').textContent = challengeStatsMessage(total, userRank);
+        challengeLbSubtitle.classList.add('visible');
+      });
     }
 
     lapsMinusBtn.addEventListener('click', function () {

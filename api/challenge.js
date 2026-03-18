@@ -8,12 +8,14 @@ module.exports = async function (req, res) {
     var key = (req.query || {}).challenge_key;
     if (!key) return sendJson(res, 400, { error: 'challenge_key required' });
 
-    var rows = await sql(
-      'SELECT u.username, u.country, c.time_ms, c.recorded_at FROM challenge_times c JOIN users u ON u.id = c.user_id WHERE c.challenge_key = $1 ORDER BY c.time_ms LIMIT 10',
-      [key]
-    );
+    var [rows, countRows] = await Promise.all([
+      sql('SELECT u.username, u.country, c.time_ms, c.recorded_at FROM challenge_times c JOIN users u ON u.id = c.user_id WHERE c.challenge_key = $1 ORDER BY c.time_ms LIMIT 10',
+        [key]),
+      sql('SELECT COUNT(*)::int AS total FROM challenge_times WHERE challenge_key = $1',
+        [key])
+    ]);
 
-    var result = { entries: rows };
+    var result = { entries: rows, total_count: countRows[0].total };
 
     var user = verifyToken(req);
     if (user) {

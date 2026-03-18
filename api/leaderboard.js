@@ -12,12 +12,14 @@ module.exports = async function (req, res) {
   var night = night_mode === 'true';
   var lapsInt = parseInt(laps);
 
-  var rows = await sql(
-    'SELECT u.username, u.country, b.time_ms, b.recorded_at FROM best_times b JOIN users u ON u.id = b.user_id WHERE b.track_code = $1 AND b.laps = $2 AND b.reversed = $3 AND b.night_mode = $4 ORDER BY b.time_ms LIMIT 10',
-    [track_code, lapsInt, rev, night]
-  );
+  var [rows, countRows] = await Promise.all([
+    sql('SELECT u.username, u.country, b.time_ms, b.recorded_at FROM best_times b JOIN users u ON u.id = b.user_id WHERE b.track_code = $1 AND b.laps = $2 AND b.reversed = $3 AND b.night_mode = $4 ORDER BY b.time_ms LIMIT 10',
+      [track_code, lapsInt, rev, night]),
+    sql('SELECT COUNT(*)::int AS total FROM best_times WHERE track_code = $1 AND laps = $2 AND reversed = $3 AND night_mode = $4',
+      [track_code, lapsInt, rev, night])
+  ]);
 
-  var result = { entries: rows };
+  var result = { entries: rows, total_count: countRows[0].total };
 
   var user = verifyToken(req);
   if (user) {
