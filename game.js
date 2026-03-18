@@ -2328,6 +2328,7 @@
     if (ghostMesh) ghostMesh.visible = true;
     gameState = 'countdown';
     overlay.classList.add('hidden');
+    accountBar.style.display = 'none';
     hud.style.display = 'block';
     updateHUD();
     for (var i = 0; i < semLights.length; i++) {
@@ -2372,6 +2373,7 @@
   function showResults() {
     gameState = 'finished';
     hud.style.display = 'none';
+    accountBar.style.display = '';
     resultsEl.style.display = 'flex';
     resultsList.innerHTML = '';
     leaderboardBtn.style.display = challengeMode ? '' : 'none';
@@ -2595,6 +2597,7 @@
     if (ghostMesh) ghostMesh.visible = true;
     gameState = 'countdown';
     overlay.classList.add('hidden');
+    accountBar.style.display = 'none';
     hud.style.display = 'block';
     for (var i = 0; i < semLights.length; i++) {
       semLights[i].className = 'sem-light';
@@ -2611,6 +2614,7 @@
   function restartRace() {
     resultsEl.style.display = 'none';
     overlay.classList.remove('hidden');
+    accountBar.style.display = '';
     gameState = 'menu';
     currentStageIndex = 0;
     seriesResults = [];
