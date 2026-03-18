@@ -13,7 +13,7 @@ module.exports = async function (req, res) {
   var lapsInt = parseInt(laps);
 
   var rows = await sql(
-    'SELECT u.username, b.time_ms, b.recorded_at FROM best_times b JOIN users u ON u.id = b.user_id WHERE b.track_code = $1 AND b.laps = $2 AND b.reversed = $3 AND b.night_mode = $4 ORDER BY b.time_ms LIMIT 10',
+    'SELECT u.username, u.country, b.time_ms, b.recorded_at FROM best_times b JOIN users u ON u.id = b.user_id WHERE b.track_code = $1 AND b.laps = $2 AND b.reversed = $3 AND b.night_mode = $4 ORDER BY b.time_ms LIMIT 10',
     [track_code, lapsInt, rev, night]
   );
 
@@ -24,11 +24,11 @@ module.exports = async function (req, res) {
     var inTop = rows.some(function (r) { return r.username === user.username; });
     if (!inTop) {
       var userRows = await sql(
-        'SELECT b.time_ms, (SELECT COUNT(*) FROM best_times b2 WHERE b2.track_code = $2 AND b2.laps = $3 AND b2.reversed = $4 AND b2.night_mode = $5 AND b2.time_ms < b.time_ms) + 1 AS rank FROM best_times b WHERE b.user_id = $1 AND b.track_code = $2 AND b.laps = $3 AND b.reversed = $4 AND b.night_mode = $5',
+        'SELECT b.time_ms, u.country, (SELECT COUNT(*) FROM best_times b2 WHERE b2.track_code = $2 AND b2.laps = $3 AND b2.reversed = $4 AND b2.night_mode = $5 AND b2.time_ms < b.time_ms) + 1 AS rank FROM best_times b JOIN users u ON u.id = b.user_id WHERE b.user_id = $1 AND b.track_code = $2 AND b.laps = $3 AND b.reversed = $4 AND b.night_mode = $5',
         [user.id, track_code, lapsInt, rev, night]
       );
       if (userRows.length > 0) {
-        result.user_entry = { username: user.username, time_ms: userRows[0].time_ms, rank: parseInt(userRows[0].rank) };
+        result.user_entry = { username: user.username, country: userRows[0].country, time_ms: userRows[0].time_ms, rank: parseInt(userRows[0].rank) };
       }
     }
   }

@@ -10,7 +10,7 @@ module.exports = async function (req, res) {
 
   username = username.trim();
   var sql = getDb();
-  var rows = await sql('SELECT id, username, password FROM users WHERE username = $1', [username]);
+  var rows = await sql('SELECT id, username, password, country FROM users WHERE username = $1', [username]);
 
   if (rows.length === 0) return sendJson(res, 401, { error: 'Invalid username or password' });
 
@@ -18,5 +18,5 @@ module.exports = async function (req, res) {
   if (!valid) return sendJson(res, 401, { error: 'Invalid username or password' });
 
   var token = createToken(rows[0].id, rows[0].username);
-  sendJson(res, 200, { token: token, username: rows[0].username });
+  sendJson(res, 200, { token: token, username: rows[0].username, country: rows[0].country });
 };
