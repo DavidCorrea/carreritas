@@ -668,6 +668,7 @@
   }
 
   function disposeMesh(mesh) {
+    if (mesh.isInstancedMesh) mesh.dispose();
     if (mesh.geometry && !isSharedGeom(mesh.geometry)) mesh.geometry.dispose();
     if (mesh.material && mesh.material !== startWhiteMat && mesh.material !== startBlackMat) mesh.material.dispose();
   }
@@ -1278,6 +1279,7 @@
         child.material = new THREE.MeshBasicMaterial({
           color: m.color, transparent: m.transparent, opacity: m.opacity
         });
+        m.dispose();
       }
     });
     ghostMesh.visible = false;
@@ -2829,14 +2831,16 @@
     views.menu.show();
   }
 
+  var _previewPt = new THREE.Vector3();
+  var _previewTan = new THREE.Vector3();
   function updatePreviewDrive(dt) {
     if (!player || !track) return;
     previewT = (previewT + C.camera.previewSpeed * dt) % 1;
-    var pt = track.curve.getPointAt(previewT);
-    var tan = track.curve.getTangentAt(previewT);
-    player.x = pt.x;
-    player.z = pt.z;
-    player.angle = Math.atan2(tan.x, tan.z);
+    track.curve.getPointAt(previewT, _previewPt);
+    track.curve.getTangentAt(previewT, _previewTan);
+    player.x = _previewPt.x;
+    player.z = _previewPt.z;
+    player.angle = Math.atan2(_previewTan.x, _previewTan.z);
     player.mesh.position.set(player.x, 0, player.z);
     player.mesh.rotation.y = player.angle;
   }
