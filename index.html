@@ -139,6 +139,10 @@
     .seg-control-sm .seg-option {
       padding: 0.25rem 0.625rem; font-size: 0.6875rem;
     }
+    #challenge-mode-toggle {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+    }
 
     .menu-divider {
       width: 100%; border: none;
@@ -901,7 +905,7 @@
       .pattern-options { flex-wrap: wrap; justify-content: center; }
       .settings-controls { width: 100%; flex-wrap: wrap; justify-content: center; }
 
-      #challenge-mode-toggle { flex-wrap: wrap; }
+      #challenge-mode-toggle { grid-template-columns: repeat(2, 1fr); }
       .stage-block { flex-direction: column; align-items: stretch; }
       .stage-row { flex-wrap: wrap; }
 
