@@ -56,6 +56,10 @@
   var player;
   var ghostMesh;
   var keys = {};
+  var isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  var touchState = { accel: 0, steer: 0 };
+  var touchIds = { steer: null, throttle: null };
+  var steerOriginX = 0;
   var ambientLight, carPointLight;
   var beamMeshL, beamMeshR, glowMesh, tailMesh;
   var underglowMesh, underglowLight;
@@ -156,12 +160,20 @@
   var previewModeToggle = document.getElementById('preview-mode-toggle');
   var previewCameraToggle = document.getElementById('preview-camera-toggle');
   var previewDriveToggle = document.getElementById('preview-drive-toggle');
+  var touchControlsEl = document.getElementById('touch-controls');
+  var touchSteerIndicator = document.getElementById('touch-steer-indicator');
+  var touchSteerDot = document.getElementById('touch-steer-dot');
+  var touchGasHighlight = document.getElementById('touch-gas-highlight');
+  var touchBrakeHighlight = document.getElementById('touch-brake-highlight');
+  var touchRestartBtn = document.getElementById('touch-restart-btn');
+  var touchCameraBtn = document.getElementById('touch-camera-btn');
+  var touchMenuBtn = document.getElementById('touch-menu-btn');
   var previewNightMode = false;
   var savedNightMode = false;
 
   var views = {
     menu:        { show: function () { overlay.classList.remove('hidden'); },       hide: function () { overlay.classList.add('hidden'); },       isOpen: function () { return !overlay.classList.contains('hidden'); } },
-    hud:         { show: function () { hud.style.display = 'block'; },             hide: function () { hud.style.display = 'none'; } },
+    hud:         { show: function () { hud.style.display = 'block'; if (isMobile) touchControlsEl.classList.add('active'); }, hide: function () { hud.style.display = 'none'; if (isMobile) touchControlsEl.classList.remove('active'); } },
     countdown:   { show: function () { countdownEl.style.display = 'flex'; },      hide: function () { countdownEl.style.display = 'none'; } },
     results:     { show: function () { resultsEl.style.display = 'flex'; },        hide: function () { resultsEl.style.display = 'none'; } },
     records:     { show: function () { recordsEl.classList.remove('hidden'); },     hide: function () { recordsEl.classList.add('hidden'); },     isOpen: function () { return !recordsEl.classList.contains('hidden'); } },
@@ -1106,6 +1118,26 @@
     return config;
   }
 
+  function challengeResetMs(mode) {
+    var now = new Date();
+    if (mode === 'daily-race' || mode === 'daily-series') {
+      return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime();
+    }
+    var daysSinceMonday = (now.getUTCDay() + 6) % 7;
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7 - daysSinceMonday) - now.getTime();
+  }
+
+  function formatCountdown(ms) {
+    var totalSec = Math.floor(ms / 1000);
+    var d = Math.floor(totalSec / 86400);
+    var h = Math.floor((totalSec % 86400) / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+    if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
+    return m + 'm ' + s + 's';
+  }
+
   function challengeKey(mode) {
     if (mode === 'daily-race') return 'dr:' + utcDateStr();
     if (mode === 'daily-series') return 'ds:' + utcDateStr();
@@ -1604,6 +1636,113 @@
 
     window.addEventListener('keyup', function (e) { keys[e.code] = false; });
 
+    if (isMobile) {
+      var DEAD_ZONE = 15;
+      var canvas = renderer.domElement;
+
+      function processTouch(touch) {
+        var halfW = window.innerWidth / 2;
+        if (touch.clientX < halfW) {
+          touchIds.steer = touch.identifier;
+          steerOriginX = touch.clientX;
+          touchSteerIndicator.style.left = (touch.clientX - 40) + 'px';
+          touchSteerIndicator.style.top = (touch.clientY - 40) + 'px';
+          touchSteerIndicator.classList.add('active');
+          touchSteerDot.style.left = '50%';
+        } else {
+          touchIds.throttle = touch.identifier;
+          var ratio = touch.clientY / window.innerHeight;
+          if (ratio < 0.65) {
+            touchState.accel = 1;
+            touchGasHighlight.classList.add('active');
+            touchBrakeHighlight.classList.remove('active');
+          } else {
+            touchState.accel = -1;
+            touchBrakeHighlight.classList.add('active');
+            touchGasHighlight.classList.remove('active');
+          }
+        }
+      }
+
+      canvas.addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        for (var i = 0; i < e.changedTouches.length; i++) processTouch(e.changedTouches[i]);
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', function (e) {
+        e.preventDefault();
+        for (var i = 0; i < e.changedTouches.length; i++) {
+          var t = e.changedTouches[i];
+          if (t.identifier === touchIds.steer) {
+            var dx = t.clientX - steerOriginX;
+            if (dx < -DEAD_ZONE) touchState.steer = 1;
+            else if (dx > DEAD_ZONE) touchState.steer = -1;
+            else touchState.steer = 0;
+            var dotPct = 50 + Math.max(-40, Math.min(40, dx)) * (40 / 60);
+            touchSteerDot.style.left = dotPct + '%';
+          } else if (t.identifier === touchIds.throttle) {
+            var ratio = t.clientY / window.innerHeight;
+            if (ratio < 0.65) {
+              touchState.accel = 1;
+              touchGasHighlight.classList.add('active');
+              touchBrakeHighlight.classList.remove('active');
+            } else {
+              touchState.accel = -1;
+              touchBrakeHighlight.classList.add('active');
+              touchGasHighlight.classList.remove('active');
+            }
+          }
+        }
+      }, { passive: false });
+
+      function handleTouchEnd(e) {
+        e.preventDefault();
+        for (var i = 0; i < e.changedTouches.length; i++) {
+          var id = e.changedTouches[i].identifier;
+          if (id === touchIds.steer) {
+            touchIds.steer = null;
+            touchState.steer = 0;
+            touchSteerIndicator.classList.remove('active');
+          }
+          if (id === touchIds.throttle) {
+            touchIds.throttle = null;
+            touchState.accel = 0;
+            touchGasHighlight.classList.remove('active');
+            touchBrakeHighlight.classList.remove('active');
+          }
+        }
+      }
+
+      canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+      canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+      function addTouchBtn(el, fn) {
+        el.addEventListener('touchstart', function (e) {
+          e.stopPropagation();
+          e.preventDefault();
+          fn();
+        }, { passive: false });
+      }
+
+      addTouchBtn(touchRestartBtn, function () {
+        if (gameState === 'racing' || gameState === 'countdown') {
+          restartCurrentMap();
+        } else if (gameState === 'finished') {
+          if (seriesMode && currentStageIndex < stageCount - 1) advanceToNextStage();
+          else restartCurrentMap();
+        }
+      });
+
+      addTouchBtn(touchCameraBtn, function () {
+        cameraModeIndex = (cameraModeIndex + 1) % C.camera.modes.length;
+        applyCameraMode();
+      });
+
+      addTouchBtn(touchMenuBtn, function () {
+        if (gameState === 'finished') restartRace();
+      });
+    }
+
     trackCodeInput.addEventListener('input', function () {
       challengeMode = null;
       clearTimeout(rebuildTimer);
@@ -1643,6 +1782,10 @@
         eventTab.style.display = '';
         challengesTab.style.display = 'none';
         challengeMode = null;
+        if (challengeCountdownInterval) {
+          clearInterval(challengeCountdownInterval);
+          challengeCountdownInterval = null;
+        }
         seriesMode = raceTypeBtn.querySelector('.selected').dataset.val === 'SERIES';
         reversed = dirToggleBtn.querySelector('.selected').dataset.val === 'REV';
         nightMode = modeToggleBtn.querySelector('.selected').dataset.val === 'NIGHT';
@@ -1698,6 +1841,8 @@
       }
     }
 
+    var challengeCountdownInterval = null;
+
     function renderChallengePreview() {
       var mode = challengeModeToggle.querySelector('.selected').dataset.val;
 
@@ -1705,6 +1850,10 @@
 
       var info = challengeConfigForMode(mode);
       challengePreviewEl.innerHTML = '';
+      if (challengeCountdownInterval) {
+        clearInterval(challengeCountdownInterval);
+        challengeCountdownInterval = null;
+      }
 
       var tracksDiv = document.createElement('div');
       tracksDiv.className = 'challenge-preview-tracks';
@@ -1750,6 +1899,20 @@
           info.config.laps + (info.config.laps === 1 ? ' lap' : ' laps') + ' per stage';
         challengePreviewEl.appendChild(summary);
       }
+
+      var countdown = document.createElement('div');
+      countdown.className = 'challenge-preview-countdown';
+      function updateCountdown() {
+        var remaining = challengeResetMs(mode);
+        if (remaining <= 0) {
+          renderChallengePreview();
+          return;
+        }
+        countdown.textContent = 'Changes in ' + formatCountdown(remaining);
+      }
+      updateCountdown();
+      challengeCountdownInterval = setInterval(updateCountdown, 1000);
+      challengePreviewEl.appendChild(countdown);
 
       challengeLbSubtitle.classList.remove('visible');
       challengeLbSubtitle.querySelector('span').textContent = '';
@@ -2017,6 +2180,8 @@
     if (keys['ArrowDown'] || keys['KeyS']) _input.accel = _input.accel === 1 ? 0 : -1;
     if (keys['ArrowLeft'] || keys['KeyA']) _input.steer = 1;
     if (keys['ArrowRight'] || keys['KeyD']) _input.steer = -1;
+    if (touchState.accel) _input.accel = touchState.accel;
+    if (touchState.steer) _input.steer = touchState.steer;
     return _input;
   }
 
@@ -3053,6 +3218,34 @@
   function init() {
     loadAuth();
     updateAccountBar();
+
+    if (isMobile) {
+      document.body.classList.add('mobile');
+      var startPrompts = document.querySelectorAll('.start-prompt');
+      for (var i = 0; i < startPrompts.length; i++) {
+        var text = startPrompts[i].textContent;
+        if (text.indexOf('ENTER') !== -1 && text.indexOf('ESC') !== -1) {
+          startPrompts[i].textContent = 'Tap to retry';
+        } else if (text.indexOf('ENTER') !== -1) {
+          startPrompts[i].textContent = 'Tap to start';
+        } else if (text.indexOf('ESC') !== -1) {
+          startPrompts[i].textContent = 'Back';
+        }
+      }
+      document.getElementById('auth-close').textContent = 'Skip';
+      document.getElementById('event-start-prompt').addEventListener('click', function () {
+        if (gameState === 'menu' && !views.records.isOpen() && !views.settings.isOpen() && !views.leaderboard.isOpen()) startCountdown();
+      });
+      document.getElementById('challenge-start-prompt').addEventListener('click', function () {
+        if (gameState === 'menu' && !views.records.isOpen() && !views.settings.isOpen() && !views.leaderboard.isOpen()) startCountdown();
+      });
+      document.getElementById('results-prompt').addEventListener('click', function () {
+        if (gameState === 'finished') {
+          if (seriesMode && currentStageIndex < stageCount - 1) advanceToNextStage();
+          else restartCurrentMap();
+        }
+      });
+    }
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x5d8a4a);
