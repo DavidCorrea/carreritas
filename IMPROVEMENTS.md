@@ -18,7 +18,7 @@ There are no tests. The game logic (track generation from string, lap counting, 
 
 Basic user accounts exist (username/password with bcrypt + JWT, cross-device settings sync, optional country on registration). Remaining features: country-based filtering on leaderboards, a friend system (add other users by search or username), and car color stored in the profile so friend ghosts render in the player's chosen colors.
 
-**Where:** `api/`, `game.js`, future schema additions
+**Where:** `api/`, `src/auth.js`, `src/game.js`, future schema additions
 **Why it matters:** Prerequisite for social features (country rankings, friend invites, personalized friend ghosts).
 
 ## Challenge finalization and archiving
@@ -114,5 +114,5 @@ The server only stores competitive data: race challenge best times (in `best_tim
 
 Ghost replays already use delta encoding, quantization (positions ×10, angles ×100), and flat packed arrays — dropping timestamps and JSON overhead. The remaining optimization is reducing the sample rate from 10/sec (`RECORD_INTERVAL = 0.1`) to 5/sec (200ms). This would halve frame count with negligible visual impact on interpolation.
 
-**Where:** `game.js` `RECORD_INTERVAL` constant
+**Where:** `src/game.js` `RECORD_INTERVAL` constant
 **Why it matters:** Halves per-replay size in localStorage and future server storage. Worth doing before adding ghost sync.

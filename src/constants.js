@@ -1,4 +1,4 @@
-var C = {
+export var C = {
   physics: {
     maxSpeed: 280,
     acceleration: 200,

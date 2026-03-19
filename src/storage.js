@@ -1,8 +1,10 @@
-function storageKey(code, laps, rev, night) {
+import { C } from './constants.js';
+
+export function storageKey(code, laps, rev, night) {
   return C.storage.prefix + code + '_' + laps + 'L' + (rev ? '_R' : '') + (night ? '_N' : '');
 }
 
-function encodeReplay(frames) {
+export function encodeReplay(frames) {
   if (frames.length === 0) return [];
   var packed = [];
   var px = Math.round(frames[0].x * 10);
@@ -19,7 +21,7 @@ function encodeReplay(frames) {
   return packed;
 }
 
-function decodeReplay(packed) {
+export function decodeReplay(packed) {
   var frames = [];
   if (packed.length < 3) return frames;
   var px = packed[0], pz = packed[1], pa = packed[2];
@@ -33,7 +35,7 @@ function decodeReplay(packed) {
   return frames;
 }
 
-function loadLocalBest(code, laps, rev, night) {
+export function loadLocalBest(code, laps, rev, night) {
   try {
     var data = JSON.parse(localStorage.getItem(storageKey(code, laps, rev, night)));
     if (!data || !data.time) return null;
@@ -50,7 +52,7 @@ function loadLocalBest(code, laps, rev, night) {
   return null;
 }
 
-function loadLocalAllBestTimes() {
+export function loadLocalAllBestTimes() {
   var results = [];
   for (var i = 0; i < localStorage.length; i++) {
     var key = localStorage.key(i);
@@ -74,7 +76,7 @@ function loadLocalAllBestTimes() {
   return results;
 }
 
-var GuestSession = {
+export var GuestSession = {
   loadSettings: function (callback) {
     try {
       var saved = JSON.parse(localStorage.getItem(C.storage.settingsKey));

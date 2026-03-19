@@ -1,12 +1,37 @@
 # Structure
 
-## Files
+## Root Files
 
-- `index.html` — entry point. Contains all markup, styling, and UI layout (HUD, menu overlay, countdown, results screen, car settings panel, auth panel, leaderboard panel). Loads Three.js from CDN and `game.js`. The car settings panel uses CSS grid for alignment.
-- `game.js` — all game logic in a single IIFE. No module system or build step.
+- `index.html` — entry point. Contains all markup, styling, and UI layout (HUD, menu overlay, countdown, results screen, car settings panel, auth panel, leaderboard panel). Loads Three.js from CDN and `main.js` as the module entry point. The car settings panel uses CSS grid for alignment.
+- `main.js` — module entry point. Imports and instantiates `Game` from `src/game.js`. Vite uses this as the build entry.
 - `schema.sql` — Postgres schema for users, car_settings, best_times, and challenge_times tables. Run manually against Neon to set up the database.
-- `package.json` — server-side dependencies only (Neon driver, bcryptjs, jsonwebtoken). No client-side build.
+- `package.json` — server-side dependencies (Neon driver, bcryptjs, jsonwebtoken) and Vite as a dev dependency. Build scripts: `dev`, `build`, `preview`.
+- `vite.config.js` — Vite configuration. Outputs to `dist/`.
+- `vercel.json` — Vercel build config: runs `npm run build`, serves from `dist/`.
 - `.env.example` — template for required environment variables (DATABASE_URL, JWT_SECRET).
+- `public/` — static assets copied as-is to `dist/` during build (e.g., `og-image.png`).
+
+## src/ Directory
+
+All client-side game code lives here as ES modules.
+
+- `game.js` — `Game` class orchestrator. Owns the game loop, scene setup, state transitions (menu, countdown, racing, results, settings), and coordinates all UI modules. Contains no direct DOM manipulation beyond one-time mobile init.
+- `constants.js` — game constants (`C` object): physics, car defaults, track parameters, camera config, storage keys, share text, country list.
+- `storage.js` — localStorage helpers (ghost replay encoding/decoding, best time persistence) and `GuestSession` (localStorage-only session).
+- `utils.js` — shared utilities: color conversion (`hexToInt`, `hexToRgb`, `intToHex`), Three.js cleanup (`disposeMesh`, `disposeGroup`), and time formatting (`formatTime`).
+- `track.js` — track generation from code strings: polar control points, Catmull-Rom interpolation, 3D mesh building (surface, walls, start line), SVG preview, and start position calculation.
+- `car-mesh.js` — car visual creation: shared geometries, 9 pattern types with vertex coloring for gradients.
+- `player.js` — `Player` class: position, velocity, angle, physics updates, wall collision, track projection, and lap tracking.
+- `ghost.js` — `Ghost` class: replay interpolation and rendering of a ghost car from recorded data.
+- `camera.js` — `Camera` class: orthographic/perspective modes, smooth follow, showcase cinematic mode with shot transitions.
+- `night.js` — `NightRenderer` class: headlight beams, glow effects, underglow mesh/light for night mode.
+- `input.js` — keyboard and touch input abstraction: raw state tracking, touch element lookup, and normalized `{ accel, steer }` output. Looks up its own touch DOM elements internally.
+- `auth.js` — authentication state, JWT token management, API request helper, `UserSession` factory, leaderboard fetching.
+- `hud.js` — `createHUD()` factory: racing HUD (lap counter, timer, speed, best time, stage display), countdown semaphore lights, and camera label. All DOM elements are internal.
+- `results.js` — `createResults()` factory: results screen with title, track text, lap rows, copy/share/leaderboard buttons, and prompt text. All DOM elements are internal.
+- `menu.js` — `createMenu()` factory: main overlay, track code input, tab switching, challenge preview, laps/direction/mode/race-type controls, stage list builder, and touch controls visibility. Largest UI module.
+- `panels.js` — four factory functions: `createRecords()` (personal best times), `createLeaderboard()` (online rankings), `createAuthPanel()` (login/register form), `createAccountBar()` (username display and login/logout buttons). All DOM elements are internal.
+- `settings-panel.js` — `createSettingsPanel()` factory: car color/pattern/headlight/underglow settings, pattern preview canvases, camera and preview drive toggles. All DOM elements are internal.
 
 ## api/ Directory
 
@@ -21,39 +46,14 @@ Vercel Serverless Functions. Each `.js` file becomes an endpoint at `/api/<name>
 - `leaderboard.js` — GET: top 20 times for a given track descriptor (public, no auth required)
 - `challenge.js` — GET: top 20 series challenge times by challenge key (public). POST: save series challenge total time (authenticated)
 
-## game.js Sections
-
-The file is organized into labeled sections:
-
-- **Persistence** — localStorage read/write for ghost replays and best times
-- **Sessions** — GuestSession (localStorage-only) and UserSession (dual-write to localStorage + API) abstractions for settings, best times, and records
-- **Auth** — JWT token management, login/register/logout UI, auth panel, account bar, API request helper, local data upload on login, leaderboard fetching and display
-- **String → track points** — converts an 18-char code into polar control points with a code-derived start offset
-- **Track SVG generation** — 2D Catmull-Rom interpolation to produce an SVG preview for the records panel
-- **Track generation** — builds the 3D track mesh (surface, walls, start line)
-- **Car mesh creation** — creates the player and ghost car visuals, supports 9 patterns with vertex coloring for gradients
-- **Rebuild track** — tears down and reconstructs everything for a new track code
-- **Player** — player state initialization
-- **Ghost** — ghost interpolation and rendering
-- **Recording** — samples player position at fixed intervals for ghost replay
-- **Physics** — acceleration, braking, steering, grip, friction
-- **Wall collision** — point-segment distance checks against inner/outer track edges
-- **Track projection & laps** — finds the player's closest point on the track centerline, tracks sector crossings to count laps
-- **Series** — builds the series stage list UI, handles stage advancement
-- **Input** — keyboard event handlers, menu button handlers, challenge mode tab/preview logic
-- **HUD** — updates lap counter, timer, speed, best time, stage indicator
-- **Game state** — countdown, race start, results screen, restart flow, best runs panel, share text builder
-- **Settings** — car settings UI (pattern previews, color pickers, sliders), settings panel show/hide, live preview with showcase camera and auto-drive
-- **Camera** — smooth follow on the player position. Includes a showcase mode (cinematic orbits with shot transitions) and an auto-drive preview (car follows the track centerline) used in the settings panel
-- **Night mode (3D)** — 2D canvas overlay with headlight beam masking, headlight beams, underglow mesh/light, glow effects
-- **Main loop** — `requestAnimationFrame` loop dispatching to the current game state
-- **Init** — scene setup, renderer, ground plane, initial track build, URL parameter parsing, resize handler
-
 ## Conventions
 
-- All code uses `var` declarations (ES5-style) inside a single IIFE
-- No build tools, bundler, or transpiler
-- Three.js loaded globally via CDN script tag
-- UI elements referenced once at the top via `document.getElementById`
+- Client code uses ES modules with `import`/`export` throughout `src/`
+- Stateful game objects are lightweight classes (`Player`, `Ghost`, `Camera`, `NightRenderer`) with explicit dependency injection via constructors/methods
+- UI modules are factory functions (`createHUD()`, `createResults()`, `createMenu()`, etc.) that encapsulate their DOM elements and expose intent-revealing methods. `game.js` never touches raw DOM elements for UI.
+- Pure logic and UI helpers are plain module functions (no unnecessary classes)
+- Shared Three.js geometries/materials are marked with `_shared = true` to prevent accidental disposal
+- Vite builds and bundles the client code with content-hashed filenames for cache-busting
+- Three.js loaded globally via CDN script tag (pre-module, available as `THREE` global)
 - API functions use CommonJS (`require`/`module.exports`) — Vercel's default for serverless
 - Best times are always saved to localStorage. The API is only used for race challenge times (daily race, weekly race) and series challenge totals — personal random-track bests stay client-side only. Car settings sync bidirectionally via the API when logged in

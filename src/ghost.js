@@ -1,0 +1,68 @@
+import { C } from './constants.js';
+import { disposeGroup } from './utils.js';
+import { createCarMesh } from './car-mesh.js';
+import { getStartPosition } from './track.js';
+
+export class Ghost {
+  constructor() {
+    this.mesh = null;
+    this.replay = null;
+  }
+
+  create(replay, curve, reversed, scene) {
+    this.dispose(scene);
+    this.replay = replay;
+    if (!replay) return;
+
+    var start = getStartPosition(curve, reversed);
+    this.mesh = createCarMesh({
+      color: C.car.ghostColor, x: start.x, z: start.z, angle: start.angle, opacity: 0.35
+    });
+    scene.add(this.mesh);
+    this.mesh.traverse(function (child) {
+      if (child.isMesh && child.material.type === 'MeshLambertMaterial') {
+        var m = child.material;
+        child.material = new THREE.MeshBasicMaterial({
+          color: m.color, transparent: m.transparent, opacity: m.opacity
+        });
+        m.dispose();
+      }
+    });
+    this.mesh.visible = false;
+  }
+
+  update(raceTimer) {
+    if (!this.mesh || !this.replay) return;
+
+    var frameTime = raceTimer / C.track.recordInterval;
+    var i = Math.floor(frameTime);
+
+    if (i >= this.replay.length - 1) {
+      this.mesh.visible = false;
+      return;
+    }
+
+    var frac = frameTime - i;
+    var fa = this.replay[i], fb = this.replay[i + 1];
+
+    var x = fa.x + (fb.x - fa.x) * frac;
+    var z = fa.z + (fb.z - fa.z) * frac;
+
+    var angleDiff = fb.a - fa.a;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+    this.mesh.position.set(x, 0, z);
+    this.mesh.rotation.y = fa.a + angleDiff * frac;
+    this.mesh.visible = true;
+  }
+
+  dispose(scene) {
+    if (this.mesh) {
+      disposeGroup(this.mesh);
+      scene.remove(this.mesh);
+      this.mesh = null;
+    }
+    this.replay = null;
+  }
+}
