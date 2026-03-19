@@ -36,17 +36,20 @@
 
     #lap-display { position: absolute; top: 20px; left: 20px; }
     #lap-times-list {
-      position: absolute; top: 70px; left: 20px;
-      font-size: 13px;
+      position: absolute; top: 62px; left: 20px;
+    }
+    #lap-times-list .hud-box {
+      font-size: 0.75rem;
+      padding: 5px 12px;
     }
     #best-display { position: absolute; top: 20px; right: 20px; }
-    #time-display { position: absolute; top: 70px; right: 20px; font-size: 15px; }
+    #time-display { position: absolute; top: 62px; right: 20px; font-size: 15px; }
     #speed-display {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
       font-size: 22px;
     }
     #stage-display {
-      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 20px; left: 20px;
     }
     #camera-display { position: absolute; bottom: 30px; right: 20px; font-size: 13px; }
     #controls-hint {
@@ -990,6 +993,8 @@
   <p class="start-prompt" id="settings-back" style="position:absolute; top:16px; right:24px; font-size:14px; cursor:pointer; margin:0; z-index:31; display:none;">ESC Back</p>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+  <script src="constants.js"></script>
+  <script src="storage.js"></script>
   <script src="game.js"></script>
   <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
   <script defer src="/_vercel/insights/script.js"></script>

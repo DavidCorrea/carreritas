@@ -1,37 +1,15 @@
 (function () {
-  var TRACK_WIDTH = 55;
-  var CAR_RADIUS = 6;
-  var MAX_SPEED = 280;
-  var ACCELERATION = 200;
-  var BRAKE_FORCE = 320;
-  var STEER_SPEED = 2.8;
-  var FRICTION = 0.985;
-  var GRIP = 3.5;
   var totalLaps = 3;
   var reversed = false;
   var nightMode = false;
-  var VIEW_SIZE = 450;
-  var CAMERA_HEIGHT = 300;
-  var CAMERA_MODES = ['TOP-DOWN', 'ROTATED', 'CHASE', 'ISOMETRIC'];
   var cameraModeIndex = 0;
 
-  var SHOWCASE_SHOTS = [
-    { duration: 6, radius: 45, height: 12, speed: 0.3, lookY: 5 },
-    { duration: 7, radius: 80, height: 50, speed: -0.2, lookY: 0 },
-    { duration: 5, radiusStart: 90, radiusEnd: 30, height: 18, speed: 0.15, lookY: 8 },
-    { duration: 6, radius: 55, height: 30, speed: 0.25, lookY: 3 }
-  ];
-  var SHOWCASE_TRANSITION = 1.5;
   var showcaseActive = false;
   var showcaseTimer = 0;
   var showcaseShotIndex = 0;
   var savedCameraModeIndex = 0;
   var previewRunning = false;
   var previewT = 0;
-  var PREVIEW_SPEED = 0.05;
-  var TRACK_SAMPLES = 400;
-  var RECORD_INTERVAL = 0.1;
-  var STORAGE_PREFIX = 'haxrace_ghost_';
 
   var seriesMode = false;
   var challengeMode = null;
@@ -46,27 +24,16 @@
   var currentStageIndex = 0;
   var seriesResults = [];
 
-  var GHOST_COLOR = 0x4da6e8;
-  var SETTINGS_KEY = 'carreritas_settings';
-  var DEFAULT_SETTINGS = {
-    pattern: 'solid',
-    primaryColor: '#e84d4d',
-    secondaryColor: '#ffffff',
-    headlightsColor: '#ffe0a0',
-    headlightShape: 50,
-    underglowColor: '#ff00ff',
-    underglowOpacity: 100
-  };
   var carSettings = (function () {
     try {
-      var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+      var saved = JSON.parse(localStorage.getItem(C.storage.settingsKey));
       if (saved) {
         var s = {};
-        for (var k in DEFAULT_SETTINGS) s[k] = saved[k] !== undefined ? saved[k] : DEFAULT_SETTINGS[k];
+        for (var k in C.car.defaultSettings) s[k] = saved[k] !== undefined ? saved[k] : C.car.defaultSettings[k];
         return s;
       }
     } catch (_) {}
-    return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    return JSON.parse(JSON.stringify(C.car.defaultSettings));
   })();
 
   function hexToInt(hex) {
@@ -93,7 +60,6 @@
   var beamMeshL, beamMeshR, glowMesh, tailMesh;
   var underglowMesh, underglowLight;
   var gameState = 'menu';
-  var recordsVisible = false;
   var leaderboardFrom = null;
   var raceTimer = 0;
   var countdownTimer = 0;
@@ -190,115 +156,22 @@
   var previewModeToggle = document.getElementById('preview-mode-toggle');
   var previewCameraToggle = document.getElementById('preview-camera-toggle');
   var previewDriveToggle = document.getElementById('preview-drive-toggle');
-  var settingsVisible = false;
   var previewNightMode = false;
   var savedNightMode = false;
 
-  // ── Persistence ─────────────────────────────────────────────────
-  function storageKey(code, laps, rev, night) {
-    return STORAGE_PREFIX + code + '_' + laps + 'L' + (rev ? '_R' : '') + (night ? '_N' : '');
-  }
-
-  function encodeReplay(frames) {
-    if (frames.length === 0) return [];
-    var packed = [];
-    var px = Math.round(frames[0].x * 10);
-    var pz = Math.round(frames[0].z * 10);
-    var pa = Math.round(frames[0].a * 100);
-    packed.push(px, pz, pa);
-    for (var i = 1; i < frames.length; i++) {
-      var cx = Math.round(frames[i].x * 10);
-      var cz = Math.round(frames[i].z * 10);
-      var ca = Math.round(frames[i].a * 100);
-      packed.push(cx - px, cz - pz, ca - pa);
-      px = cx; pz = cz; pa = ca;
-    }
-    return packed;
-  }
-
-  function decodeReplay(packed) {
-    var frames = [];
-    if (packed.length < 3) return frames;
-    var px = packed[0], pz = packed[1], pa = packed[2];
-    frames.push({ x: px / 10, z: pz / 10, a: pa / 100 });
-    for (var i = 3; i < packed.length; i += 3) {
-      px += packed[i];
-      pz += packed[i + 1];
-      pa += packed[i + 2];
-      frames.push({ x: px / 10, z: pz / 10, a: pa / 100 });
-    }
-    return frames;
-  }
-
-  function loadLocalBest(code, laps, rev, night) {
-    try {
-      var data = JSON.parse(localStorage.getItem(storageKey(code, laps, rev, night)));
-      if (!data || !data.time) return null;
-      if (data.v === 2 && data.packed && data.packed.length >= 3) {
-        return { time: data.time, replay: decodeReplay(data.packed) };
-      } else if (data.frames && data.frames.length > 0) {
-        var replay = [];
-        for (var i = 0; i < data.frames.length; i++) {
-          replay.push({ x: data.frames[i].x, z: data.frames[i].z, a: data.frames[i].a });
-        }
-        return { time: data.time, replay: replay };
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  function loadLocalAllBestTimes() {
-    var results = [];
-    for (var i = 0; i < localStorage.length; i++) {
-      var key = localStorage.key(i);
-      var match = key.match(/^haxrace_ghost_(.+)_(\d+)L(_R)?(_N)?$/);
-      if (!match) continue;
-      try {
-        var data = JSON.parse(localStorage.getItem(key));
-        if (data && data.time) {
-          results.push({
-            code: match[1],
-            laps: parseInt(match[2]),
-            reversed: !!match[3],
-            nightMode: !!match[4],
-            time: data.time,
-            date: data.date || null
-          });
-        }
-      } catch (_) {}
-    }
-    results.sort(function (a, b) { return a.time - b.time; });
-    return results;
-  }
-
-  // ── Sessions ───────────────────────────────────────────────────
-  var GuestSession = {
-    loadSettings: function (callback) {
-      try {
-        var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
-        if (saved) {
-          var s = {};
-          for (var k in DEFAULT_SETTINGS) s[k] = saved[k] !== undefined ? saved[k] : DEFAULT_SETTINGS[k];
-          callback(s);
-          return;
-        }
-      } catch (_) {}
-      callback(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
-    },
-    saveSettings: function (settings) {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    },
-    loadBest: function (code, laps, rev, night, callback) {
-      callback(loadLocalBest(code, laps, rev, night));
-    },
-    saveBest: function (code, laps, rev, night, time, frames) {
-      localStorage.setItem(storageKey(code, laps, rev, night), JSON.stringify({ v: 2, time: time, packed: encodeReplay(frames), date: Date.now() }));
-    },
-    getAllBestTimes: function (callback) {
-      callback(loadLocalAllBestTimes());
-    }
+  var views = {
+    menu:        { show: function () { overlay.classList.remove('hidden'); },       hide: function () { overlay.classList.add('hidden'); },       isOpen: function () { return !overlay.classList.contains('hidden'); } },
+    hud:         { show: function () { hud.style.display = 'block'; },             hide: function () { hud.style.display = 'none'; } },
+    countdown:   { show: function () { countdownEl.style.display = 'flex'; },      hide: function () { countdownEl.style.display = 'none'; } },
+    results:     { show: function () { resultsEl.style.display = 'flex'; },        hide: function () { resultsEl.style.display = 'none'; } },
+    records:     { show: function () { recordsEl.classList.remove('hidden'); },     hide: function () { recordsEl.classList.add('hidden'); },     isOpen: function () { return !recordsEl.classList.contains('hidden'); } },
+    settings:    { show: function () { settingsEl.classList.remove('hidden'); },    hide: function () { settingsEl.classList.add('hidden'); },    isOpen: function () { return !settingsEl.classList.contains('hidden'); } },
+    leaderboard: { show: function () { leaderboardEl.style.display = 'flex'; },    hide: function () { leaderboardEl.style.display = 'none'; },  isOpen: function () { return leaderboardEl.style.display === 'flex'; } },
+    auth:        { show: function () { authEl.classList.add('visible'); },          hide: function () { authEl.classList.remove('visible'); },     isOpen: function () { return authEl.classList.contains('visible'); } },
+    accountBar:  { show: function () { accountBar.style.display = ''; },           hide: function () { accountBar.style.display = 'none'; } }
   };
 
+  // ── Sessions ───────────────────────────────────────────────────
   var UserSession = {
     loadSettings: function (callback) {
       apiRequest('GET', '/api/settings').then(function (data) {
@@ -309,7 +182,7 @@
       });
     },
     saveSettings: function (settings) {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      localStorage.setItem(C.storage.settingsKey, JSON.stringify(settings));
       apiRequest('PUT', '/api/settings', { settings: settings }).catch(function () {});
     },
     loadBest: function (code, laps, rev, night, callback) {
@@ -372,7 +245,6 @@
   }
 
   // ── Auth ───────────────────────────────────────────────────────
-  var AUTH_KEY = 'carreritas_auth';
   var authToken = null;
   var authUsername = null;
   var authCountry = null;
@@ -380,7 +252,7 @@
 
   function loadAuth() {
     try {
-      var saved = JSON.parse(localStorage.getItem(AUTH_KEY));
+      var saved = JSON.parse(localStorage.getItem(C.storage.authKey));
       if (saved && saved.token && saved.username) {
         authToken = saved.token;
         authUsername = saved.username;
@@ -394,216 +266,17 @@
     authToken = token;
     authUsername = username;
     authCountry = country || null;
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ token: token, username: username, country: country || null }));
+    localStorage.setItem(C.storage.authKey, JSON.stringify({ token: token, username: username, country: country || null }));
   }
 
   function clearAuth() {
     authToken = null;
     authUsername = null;
     authCountry = null;
-    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(C.storage.authKey);
   }
 
   function isLoggedIn() { return !!authToken; }
-
-  var COUNTRIES = [
-    ['AF', 'Afghanistan'],
-    ['AL', 'Albania'],
-    ['DZ', 'Algeria'],
-    ['AD', 'Andorra'],
-    ['AO', 'Angola'],
-    ['AG', 'Antigua and Barbuda'],
-    ['AR', 'Argentina'],
-    ['AM', 'Armenia'],
-    ['AU', 'Australia'],
-    ['AT', 'Austria'],
-    ['AZ', 'Azerbaijan'],
-    ['BS', 'Bahamas'],
-    ['BH', 'Bahrain'],
-    ['BD', 'Bangladesh'],
-    ['BB', 'Barbados'],
-    ['BY', 'Belarus'],
-    ['BE', 'Belgium'],
-    ['BZ', 'Belize'],
-    ['BJ', 'Benin'],
-    ['BT', 'Bhutan'],
-    ['BO', 'Bolivia'],
-    ['BA', 'Bosnia and Herzegovina'],
-    ['BW', 'Botswana'],
-    ['BR', 'Brazil'],
-    ['BN', 'Brunei'],
-    ['BG', 'Bulgaria'],
-    ['BF', 'Burkina Faso'],
-    ['BI', 'Burundi'],
-    ['CV', 'Cabo Verde'],
-    ['KH', 'Cambodia'],
-    ['CM', 'Cameroon'],
-    ['CA', 'Canada'],
-    ['CF', 'Central African Republic'],
-    ['TD', 'Chad'],
-    ['CL', 'Chile'],
-    ['CN', 'China'],
-    ['CO', 'Colombia'],
-    ['KM', 'Comoros'],
-    ['CG', 'Congo (Congo-Brazzaville)'],
-    ['CD', 'Democratic Republic of the Congo'],
-    ['CR', 'Costa Rica'],
-    ['HR', 'Croatia'],
-    ['CU', 'Cuba'],
-    ['CY', 'Cyprus'],
-    ['CZ', 'Czechia (Czech Republic)'],
-    ['DK', 'Denmark'],
-    ['DJ', 'Djibouti'],
-    ['DM', 'Dominica'],
-    ['DO', 'Dominican Republic'],
-    ['EC', 'Ecuador'],
-    ['EG', 'Egypt'],
-    ['SV', 'El Salvador'],
-    ['GQ', 'Equatorial Guinea'],
-    ['ER', 'Eritrea'],
-    ['EE', 'Estonia'],
-    ['SZ', 'Eswatini'],
-    ['ET', 'Ethiopia'],
-    ['FJ', 'Fiji'],
-    ['FI', 'Finland'],
-    ['FR', 'France'],
-    ['GA', 'Gabon'],
-    ['GM', 'Gambia'],
-    ['GE', 'Georgia'],
-    ['DE', 'Germany'],
-    ['GH', 'Ghana'],
-    ['GR', 'Greece'],
-    ['GD', 'Grenada'],
-    ['GT', 'Guatemala'],
-    ['GN', 'Guinea'],
-    ['GW', 'Guinea-Bissau'],
-    ['GY', 'Guyana'],
-    ['HT', 'Haiti'],
-    ['HN', 'Honduras'],
-    ['HU', 'Hungary'],
-    ['IS', 'Iceland'],
-    ['IN', 'India'],
-    ['ID', 'Indonesia'],
-    ['IR', 'Iran'],
-    ['IQ', 'Iraq'],
-    ['IE', 'Ireland'],
-    ['IL', 'Israel'],
-    ['IT', 'Italy'],
-    ['JM', 'Jamaica'],
-    ['JP', 'Japan'],
-    ['JO', 'Jordan'],
-    ['KZ', 'Kazakhstan'],
-    ['KE', 'Kenya'],
-    ['KI', 'Kiribati'],
-    ['KW', 'Kuwait'],
-    ['KG', 'Kyrgyzstan'],
-    ['LA', 'Laos'],
-    ['LV', 'Latvia'],
-    ['LB', 'Lebanon'],
-    ['LS', 'Lesotho'],
-    ['LR', 'Liberia'],
-    ['LY', 'Libya'],
-    ['LI', 'Liechtenstein'],
-    ['LT', 'Lithuania'],
-    ['LU', 'Luxembourg'],
-    ['MG', 'Madagascar'],
-    ['MW', 'Malawi'],
-    ['MY', 'Malaysia'],
-    ['MV', 'Maldives'],
-    ['ML', 'Mali'],
-    ['MT', 'Malta'],
-    ['MH', 'Marshall Islands'],
-    ['MR', 'Mauritania'],
-    ['MU', 'Mauritius'],
-    ['MX', 'Mexico'],
-    ['FM', 'Micronesia'],
-    ['MD', 'Moldova'],
-    ['MC', 'Monaco'],
-    ['MN', 'Mongolia'],
-    ['ME', 'Montenegro'],
-    ['MA', 'Morocco'],
-    ['MZ', 'Mozambique'],
-    ['MM', 'Myanmar (Burma)'],
-    ['NA', 'Namibia'],
-    ['NR', 'Nauru'],
-    ['NP', 'Nepal'],
-    ['NL', 'Netherlands'],
-    ['NZ', 'New Zealand'],
-    ['NI', 'Nicaragua'],
-    ['NE', 'Niger'],
-    ['NG', 'Nigeria'],
-    ['KP', 'North Korea'],
-    ['MK', 'North Macedonia'],
-    ['NO', 'Norway'],
-    ['OM', 'Oman'],
-    ['PK', 'Pakistan'],
-    ['PW', 'Palau'],
-    ['PS', 'Palestine'],
-    ['PA', 'Panama'],
-    ['PG', 'Papua New Guinea'],
-    ['PY', 'Paraguay'],
-    ['PE', 'Peru'],
-    ['PH', 'Philippines'],
-    ['PL', 'Poland'],
-    ['PT', 'Portugal'],
-    ['QA', 'Qatar'],
-    ['RO', 'Romania'],
-    ['RU', 'Russia'],
-    ['RW', 'Rwanda'],
-    ['KN', 'Saint Kitts and Nevis'],
-    ['LC', 'Saint Lucia'],
-    ['VC', 'Saint Vincent and the Grenadines'],
-    ['WS', 'Samoa'],
-    ['SM', 'San Marino'],
-    ['ST', 'Sao Tome and Principe'],
-    ['SA', 'Saudi Arabia'],
-    ['SN', 'Senegal'],
-    ['RS', 'Serbia'],
-    ['SC', 'Seychelles'],
-    ['SL', 'Sierra Leone'],
-    ['SG', 'Singapore'],
-    ['SK', 'Slovakia'],
-    ['SI', 'Slovenia'],
-    ['SB', 'Solomon Islands'],
-    ['SO', 'Somalia'],
-    ['ZA', 'South Africa'],
-    ['KR', 'South Korea'],
-    ['SS', 'South Sudan'],
-    ['ES', 'Spain'],
-    ['LK', 'Sri Lanka'],
-    ['SD', 'Sudan'],
-    ['SR', 'Suriname'],
-    ['SE', 'Sweden'],
-    ['CH', 'Switzerland'],
-    ['SY', 'Syria'],
-    ['TW', 'Taiwan'],
-    ['TJ', 'Tajikistan'],
-    ['TZ', 'Tanzania'],
-    ['TH', 'Thailand'],
-    ['TL', 'Timor-Leste'],
-    ['TG', 'Togo'],
-    ['TO', 'Tonga'],
-    ['TT', 'Trinidad and Tobago'],
-    ['TN', 'Tunisia'],
-    ['TR', 'Turkey'],
-    ['TM', 'Turkmenistan'],
-    ['TV', 'Tuvalu'],
-    ['UG', 'Uganda'],
-    ['UA', 'Ukraine'],
-    ['AE', 'United Arab Emirates'],
-    ['GB', 'United Kingdom'],
-    ['US', 'United States'],
-    ['UY', 'Uruguay'],
-    ['UZ', 'Uzbekistan'],
-    ['VU', 'Vanuatu'],
-    ['VA', 'Vatican City'],
-    ['VE', 'Venezuela'],
-    ['VN', 'Vietnam'],
-    ['YE', 'Yemen'],
-    ['ZM', 'Zambia'],
-    ['ZW', 'Zimbabwe'],
-    ['XK', 'Kosovo']
-  ];
 
   function countryFlag(code) {
     if (!code || code.length !== 2) return '';
@@ -618,10 +291,10 @@
     opt.value = '';
     opt.textContent = 'Select country';
     authCountrySelect.appendChild(opt);
-    for (var i = 0; i < COUNTRIES.length; i++) {
+    for (var i = 0; i < C.countries.length; i++) {
       var o = document.createElement('option');
-      o.value = COUNTRIES[i][0];
-      o.textContent = countryFlag(COUNTRIES[i][0]) + ' ' + COUNTRIES[i][1];
+      o.value = C.countries[i][0];
+      o.textContent = countryFlag(C.countries[i][0]) + ' ' + C.countries[i][1];
       authCountrySelect.appendChild(o);
     }
   }
@@ -654,13 +327,13 @@
     authPasswordInput.value = '';
     authCountrySelect.value = '';
     authCountrySelect.style.display = 'none';
-    authEl.classList.add('visible');
+    views.auth.show();
     document.getElementById('auth-switch').addEventListener('click', toggleAuthMode);
     authUsernameInput.focus();
   }
 
   function hideAuthPanel() {
-    authEl.classList.remove('visible');
+    views.auth.hide();
   }
 
   function toggleAuthMode() {
@@ -716,10 +389,10 @@
         uploadLocalData();
         if (!authIsRegister) {
           session.loadSettings(function (remote) {
-            for (var k in DEFAULT_SETTINGS) {
+            for (var k in C.car.defaultSettings) {
               if (remote[k] !== undefined) carSettings[k] = remote[k];
             }
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(carSettings));
+            localStorage.setItem(C.storage.settingsKey, JSON.stringify(carSettings));
             applyCarSettings();
           });
         }
@@ -834,11 +507,11 @@
       showLeaderboardForCurrentTrack();
     }
 
-    leaderboardEl.style.display = 'flex';
+    views.leaderboard.show();
   }
 
   function hideLeaderboard() {
-    leaderboardEl.style.display = 'none';
+    views.leaderboard.hide();
   }
 
   // ── String → track points (polar) ────────────────────────────────
@@ -955,7 +628,7 @@
     var tx = center[1].x - center[n - 1].x;
     var ty = center[1].y - center[n - 1].y;
     var tl = Math.sqrt(tx * tx + ty * ty);
-    var hw = TRACK_WIDTH / 2;
+    var hw = C.track.width / 2;
     var snx = -ty / tl, sny = tx / tl;
     var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (var i = 0; i < center.length; i++) {
@@ -969,7 +642,7 @@
       (minX - pad).toFixed(0) + ' ' + (minY - pad).toFixed(0) + ' ' +
       (maxX - minX + pad * 2).toFixed(0) + ' ' + (maxY - minY + pad * 2).toFixed(0) +
       '">' +
-      '<path d="' + d + '" fill="none" stroke="#555" stroke-width="' + TRACK_WIDTH + '" stroke-linejoin="round"/>' +
+      '<path d="' + d + '" fill="none" stroke="#555" stroke-width="' + C.track.width + '" stroke-linejoin="round"/>' +
       '<line x1="' + (center[0].x - snx * hw).toFixed(1) + '" y1="' + (center[0].y - sny * hw).toFixed(1) +
       '" x2="' + (center[0].x + snx * hw).toFixed(1) + '" y2="' + (center[0].y + sny * hw).toFixed(1) +
       '" stroke="#fff" stroke-width="3"/>' +
@@ -977,15 +650,34 @@
   }
 
   // ── Track generation ──────────────────────────────────────────────
+  function isSharedGeom(geom) {
+    for (var k in sharedGeom) { if (sharedGeom[k] === geom) return true; }
+    return false;
+  }
+
+  function disposeMesh(mesh) {
+    if (mesh.geometry && !isSharedGeom(mesh.geometry)) mesh.geometry.dispose();
+    if (mesh.material && mesh.material !== startWhiteMat && mesh.material !== startBlackMat) mesh.material.dispose();
+  }
+
+  function disposeGroup(group) {
+    group.traverse(function (child) {
+      if (child.isMesh) disposeMesh(child);
+    });
+  }
+
   function generateTrack(code) {
-    if (trackGroup) scene.remove(trackGroup);
+    if (trackGroup) {
+      disposeGroup(trackGroup);
+      scene.remove(trackGroup);
+    }
     trackGroup = new THREE.Group();
     scene.add(trackGroup);
 
     var pts = stringToTrackPoints(code);
     var curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal', 0.5);
-    var sampled = curve.getSpacedPoints(TRACK_SAMPLES);
-    var halfW = TRACK_WIDTH / 2;
+    var sampled = curve.getSpacedPoints(C.track.samples);
+    var halfW = C.track.width / 2;
     var inner = [], outer = [];
 
     for (var i = 0; i < sampled.length; i++) {
@@ -1005,6 +697,12 @@
     buildTrackSurface(inner, outer);
     buildWalls(inner, outer);
     buildStartLine(curve);
+
+    trackGroup.traverse(function (child) {
+      child.matrixAutoUpdate = false;
+      child.frustumCulled = false;
+      child.updateMatrix();
+    });
 
     return { curve: curve, sampled: sampled, inner: inner, outer: outer };
   }
@@ -1029,7 +727,7 @@
   function buildWalls(inner, outer) {
     var step = 2;
     var count = Math.ceil(inner.length / step) + Math.ceil(outer.length / step);
-    var geom = new THREE.SphereGeometry(1.8, 8, 6);
+    var geom = new THREE.SphereGeometry(1.8, 6, 4);
     var mesh = new THREE.InstancedMesh(geom, new THREE.MeshLambertMaterial({ color: 0xcccccc }), count);
     var dummy = new THREE.Object3D();
     var n = 0;
@@ -1054,12 +752,11 @@
     var nx = -t.z, nz = t.x;
     var angle = Math.atan2(t.x, t.z);
     var squares = 8;
-    var size = TRACK_WIDTH / squares;
+    var size = C.track.width / squares;
     for (var i = 0; i < squares; i++) {
-      var color = i % 2 === 0 ? 0xffffff : 0x222222;
       var box = new THREE.Mesh(
-        new THREE.BoxGeometry(size, 0.1, 3),
-        new THREE.MeshLambertMaterial({ color: color })
+        sharedGeom.startBox,
+        i % 2 === 0 ? startWhiteMat : startBlackMat
       );
       var offset = (i - squares / 2 + 0.5) * size;
       box.position.set(p.x + nx * offset, 0.05, p.z + nz * offset);
@@ -1069,7 +766,21 @@
   }
 
   // ── Car mesh creation ─────────────────────────────────────────────
-  var PATTERNS = ['solid', 'ring', 'half', 'stripe', 'gradient', 'radial', 'spiral', 'dots', 'bullseye'];
+  var sharedGeom = {
+    disc:           new THREE.CircleGeometry(C.car.radius, 20),
+    halfA:          new THREE.CircleGeometry(C.car.radius, 20, 0, Math.PI),
+    halfB:          new THREE.CircleGeometry(C.car.radius, 20, Math.PI, Math.PI),
+    ring:           new THREE.RingGeometry(C.car.radius * 0.82, C.car.radius, 20),
+    dot:            new THREE.CircleGeometry(C.car.radius * 0.22, 12),
+    shadow:         new THREE.CircleGeometry(C.car.radius * 1.1, 20),
+    dotsDot:        new THREE.CircleGeometry(C.car.radius * 0.17, 10),
+    bullseyeMid:    new THREE.CircleGeometry(C.car.radius * 0.65, 16),
+    bullseyeCenter: new THREE.CircleGeometry(C.car.radius * 0.35, 12),
+    stripe:         new THREE.PlaneGeometry(C.car.radius * 2, C.car.radius * 0.35),
+    startBox:       new THREE.BoxGeometry(C.track.width / 8, 0.1, 3)
+  };
+  var startWhiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  var startBlackMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
 
   function createCarMesh(opts) {
     var group = new THREE.Group();
@@ -1081,7 +792,7 @@
 
     if (pattern === 'half') {
       var halfA = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS, 20, 0, Math.PI),
+        sharedGeom.halfA,
         new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
       );
       halfA.rotation.x = -Math.PI / 2;
@@ -1089,7 +800,7 @@
       group.add(halfA);
 
       var halfB = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS, 20, Math.PI, Math.PI),
+        sharedGeom.halfB,
         new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
       );
       halfB.rotation.x = -Math.PI / 2;
@@ -1106,7 +817,7 @@
 
       for (var ri = 0; ri <= rSegs; ri++) {
         var rFrac = ri / rSegs;
-        var rad = rFrac * CAR_RADIUS;
+        var rad = rFrac * C.car.radius;
         for (var ai = 0; ai <= aSegs; ai++) {
           var ang = (ai / aSegs) * Math.PI * 2;
           var px = Math.cos(ang) * rad;
@@ -1114,7 +825,7 @@
           gPositions.push(px, py, 0);
           var t;
           if (pattern === 'gradient') {
-            t = (py / CAR_RADIUS + 1) * 0.5;
+            t = (py / C.car.radius + 1) * 0.5;
           } else {
             t = 1 - rFrac;
           }
@@ -1152,7 +863,7 @@
       for (var si = 0; si < blades; si++) {
         var sliceColor = si % 2 === 0 ? primary : secondary;
         var slice = new THREE.Mesh(
-          new THREE.CircleGeometry(CAR_RADIUS, 8, si * sliceAngle, sliceAngle),
+          new THREE.CircleGeometry(C.car.radius, 8, si * sliceAngle, sliceAngle),
           new THREE.MeshLambertMaterial(Object.assign({ color: sliceColor }, matOpts))
         );
         slice.rotation.x = -Math.PI / 2;
@@ -1161,19 +872,18 @@
       }
     } else if (pattern === 'dots') {
       var dotsDisc = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS, 20),
+        sharedGeom.disc,
         new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
       );
       dotsDisc.rotation.x = -Math.PI / 2;
       dotsDisc.position.y = 2;
       group.add(dotsDisc);
       var dotAngles = [0.4, 1.4, 2.5, 3.7, 5.0];
-      var dotDist = CAR_RADIUS * 0.55;
-      var dotR = CAR_RADIUS * 0.17;
+      var dotDist = C.car.radius * 0.55;
       for (var di = 0; di < dotAngles.length; di++) {
         var da = dotAngles[di];
         var dMesh = new THREE.Mesh(
-          new THREE.CircleGeometry(dotR, 10),
+          sharedGeom.dotsDot,
           new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
         );
         dMesh.rotation.x = -Math.PI / 2;
@@ -1182,21 +892,21 @@
       }
     } else if (pattern === 'bullseye') {
       var beDisc = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS, 20),
+        sharedGeom.disc,
         new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
       );
       beDisc.rotation.x = -Math.PI / 2;
       beDisc.position.y = 2;
       group.add(beDisc);
       var beRing = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS * 0.65, 16),
+        sharedGeom.bullseyeMid,
         new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
       );
       beRing.rotation.x = -Math.PI / 2;
       beRing.position.y = 2.1;
       group.add(beRing);
       var beCenter = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS * 0.35, 12),
+        sharedGeom.bullseyeCenter,
         new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
       );
       beCenter.rotation.x = -Math.PI / 2;
@@ -1204,7 +914,7 @@
       group.add(beCenter);
     } else {
       var disc = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS, 20),
+        sharedGeom.disc,
         new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
       );
       disc.rotation.x = -Math.PI / 2;
@@ -1214,7 +924,7 @@
 
     if (pattern === 'stripe') {
       var stripe = new THREE.Mesh(
-        new THREE.PlaneGeometry(CAR_RADIUS * 2, CAR_RADIUS * 0.35),
+        sharedGeom.stripe,
         new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
       );
       stripe.rotation.x = -Math.PI / 2;
@@ -1225,7 +935,7 @@
     var ringColor = pattern === 'ring' ? secondary : 0x000000;
     var ringOpacity = pattern === 'ring' ? 0.8 * opts.opacity : 0.3 * opts.opacity;
     var ring = new THREE.Mesh(
-      new THREE.RingGeometry(CAR_RADIUS * 0.82, CAR_RADIUS, 20),
+      sharedGeom.ring,
       new THREE.MeshLambertMaterial({ color: ringColor, transparent: true, opacity: ringOpacity })
     );
     ring.rotation.x = -Math.PI / 2;
@@ -1233,16 +943,16 @@
     group.add(ring);
 
     var dot = new THREE.Mesh(
-      new THREE.CircleGeometry(CAR_RADIUS * 0.22, 12),
+      sharedGeom.dot,
       new THREE.MeshLambertMaterial(Object.assign({ color: 0xffffff }, matOpts))
     );
     dot.rotation.x = -Math.PI / 2;
-    dot.position.set(0, 2.5, CAR_RADIUS * 0.55);
+    dot.position.set(0, 2.5, C.car.radius * 0.55);
     group.add(dot);
 
     if (!transparent) {
       var shadow = new THREE.Mesh(
-        new THREE.CircleGeometry(CAR_RADIUS * 1.1, 20),
+        sharedGeom.shadow,
         new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15 })
       );
       shadow.rotation.x = -Math.PI / 2;
@@ -1269,8 +979,8 @@
 
   // ── Rebuild track ─────────────────────────────────────────────────
   function rebuildTrack(code) {
-    if (player) { scene.remove(player.mesh); player = null; }
-    if (ghostMesh) { scene.remove(ghostMesh); ghostMesh = null; }
+    if (player) { disposeGroup(player.mesh); scene.remove(player.mesh); player = null; }
+    if (ghostMesh) { disposeGroup(ghostMesh); scene.remove(ghostMesh); ghostMesh = null; }
 
     currentTrackCode = code;
     track = generateTrack(code);
@@ -1511,17 +1221,24 @@
       finished: false, finishTime: 0,
       lapTimes: [], lapStartTime: 0
     };
-    var initialT = getTrackT(player);
-    player.currentSector = Math.min(Math.floor(initialT * 4), 3);
+    lastTrackIdx = 0;
+    var bestD = Infinity;
+    for (var i = 0; i < track.sampled.length; i++) {
+      var dx = player.x - track.sampled[i].x;
+      var dz = player.z - track.sampled[i].z;
+      var d = dx * dx + dz * dz;
+      if (d < bestD) { bestD = d; lastTrackIdx = i; }
+    }
+    player.currentSector = Math.min(Math.floor(lastTrackIdx / track.sampled.length * 4), 3);
   }
 
   // ── Ghost ─────────────────────────────────────────────────────────
   function createGhost() {
-    if (ghostMesh) { scene.remove(ghostMesh); ghostMesh = null; }
+    if (ghostMesh) { disposeGroup(ghostMesh); scene.remove(ghostMesh); ghostMesh = null; }
     if (!bestReplay) return;
     var start = getStartPosition();
     ghostMesh = createCarMesh({
-      color: GHOST_COLOR, x: start.x, z: start.z, angle: start.angle, opacity: 0.35
+      color: C.car.ghostColor, x: start.x, z: start.z, angle: start.angle, opacity: 0.35
     });
     ghostMesh.traverse(function (child) {
       if (child.isMesh && child.material.type === 'MeshLambertMaterial') {
@@ -1537,7 +1254,7 @@
   function updateGhost() {
     if (!ghostMesh || !bestReplay) return;
 
-    var frameTime = raceTimer / RECORD_INTERVAL;
+    var frameTime = raceTimer / C.track.recordInterval;
     var i = Math.floor(frameTime);
 
     if (i >= bestReplay.length - 1) {
@@ -1563,8 +1280,8 @@
   // ── Recording ─────────────────────────────────────────────────────
   function recordFrame(dt) {
     recordAccum += dt;
-    if (recordAccum >= RECORD_INTERVAL) {
-      recordAccum -= RECORD_INTERVAL;
+    if (recordAccum >= C.track.recordInterval) {
+      recordAccum -= C.track.recordInterval;
       recording.push({ x: player.x, z: player.z, a: player.angle });
     }
   }
@@ -1572,7 +1289,7 @@
   // ── Physics ───────────────────────────────────────────────────────
   function updatePlayerPhysics(dt, accel, steer) {
     if (player.speed > 5) {
-      player.angle += steer * STEER_SPEED * dt;
+      player.angle += steer * C.physics.steerSpeed * dt;
     }
 
     var fx = Math.sin(player.angle);
@@ -1580,22 +1297,22 @@
 
     if (accel > 0) {
       var fwdSpeed = player.vx * fx + player.vz * fz;
-      if (fwdSpeed < MAX_SPEED) {
-        player.vx += fx * ACCELERATION * accel * dt;
-        player.vz += fz * ACCELERATION * accel * dt;
+      if (fwdSpeed < C.physics.maxSpeed) {
+        player.vx += fx * C.physics.acceleration * accel * dt;
+        player.vz += fz * C.physics.acceleration * accel * dt;
       }
     } else if (accel < 0) {
-      player.vx += fx * BRAKE_FORCE * accel * dt;
-      player.vz += fz * BRAKE_FORCE * accel * dt;
+      player.vx += fx * C.physics.brakeForce * accel * dt;
+      player.vz += fz * C.physics.brakeForce * accel * dt;
     }
 
     var rx = -fz, rz = fx;
     var lateral = player.vx * rx + player.vz * rz;
-    var gripDamp = 1 - Math.min(GRIP * dt, 0.95);
+    var gripDamp = 1 - Math.min(C.physics.grip * dt, 0.95);
     player.vx -= rx * lateral * (1 - gripDamp);
     player.vz -= rz * lateral * (1 - gripDamp);
 
-    var fricPow = Math.pow(FRICTION, dt * 60);
+    var fricPow = Math.pow(C.physics.friction, dt * 60);
     player.vx *= fricPow;
     player.vz *= fricPow;
 
@@ -1603,31 +1320,42 @@
     player.z += player.vz * dt;
     player.speed = Math.sqrt(player.vx * player.vx + player.vz * player.vz);
 
-    player.mesh.position.set(player.x, 0, player.z);
     player.mesh.rotation.y = player.angle;
   }
 
   // ── Wall collision ────────────────────────────────────────────────
+  var _psd = { d: 0, cx: 0, cz: 0 };
+
   function pointSegDist(px, pz, ax, az, bx, bz) {
     var dx = bx - ax, dz = bz - az;
     var lenSq = dx * dx + dz * dz;
-    if (lenSq < 0.001) return { d: Math.sqrt((px - ax) * (px - ax) + (pz - az) * (pz - az)), cx: ax, cz: az };
+    if (lenSq < 0.001) {
+      _psd.d = Math.sqrt((px - ax) * (px - ax) + (pz - az) * (pz - az));
+      _psd.cx = ax; _psd.cz = az;
+      return _psd;
+    }
     var t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lenSq));
     var cx = ax + t * dx, cz = az + t * dz;
     var ex = px - cx, ez = pz - cz;
-    return { d: Math.sqrt(ex * ex + ez * ez), cx: cx, cz: cz };
+    _psd.d = Math.sqrt(ex * ex + ez * ez);
+    _psd.cx = cx; _psd.cz = cz;
+    return _psd;
   }
 
+  var collisionWindow = 40;
+
   function wallCollision(edge) {
-    var r = CAR_RADIUS + 1.8;
-    for (var i = 0; i < edge.length; i++) {
-      var j = (i + 1) % edge.length;
-      var res = pointSegDist(player.x, player.z, edge[i].x, edge[i].z, edge[j].x, edge[j].z);
-      if (res.d < r && res.d > 0.01) {
-        var nx = (player.x - res.cx) / res.d;
-        var nz = (player.z - res.cz) / res.d;
-        player.x = res.cx + nx * r;
-        player.z = res.cz + nz * r;
+    var r = C.car.radius + 1.8;
+    var n = edge.length;
+    for (var offset = -collisionWindow; offset <= collisionWindow; offset++) {
+      var i = ((lastTrackIdx + offset) % n + n) % n;
+      var j = (i + 1) % n;
+      pointSegDist(player.x, player.z, edge[i].x, edge[i].z, edge[j].x, edge[j].z);
+      if (_psd.d < r && _psd.d > 0.01) {
+        var nx = (player.x - _psd.cx) / _psd.d;
+        var nz = (player.z - _psd.cz) / _psd.d;
+        player.x = _psd.cx + nx * r;
+        player.z = _psd.cz + nz * r;
 
         var dot = player.vx * nx + player.vz * nz;
         if (dot < 0) {
@@ -1641,15 +1369,21 @@
   }
 
   // ── Track projection & laps ───────────────────────────────────────
+  var lastTrackIdx = 0;
+
   function getTrackT(car) {
+    var n = track.sampled.length;
     var best = 0, bestD = Infinity;
-    for (var i = 0; i < track.sampled.length; i++) {
+    var window = 40;
+    for (var offset = -window; offset <= window; offset++) {
+      var i = ((lastTrackIdx + offset) % n + n) % n;
       var dx = car.x - track.sampled[i].x;
       var dz = car.z - track.sampled[i].z;
       var d = dx * dx + dz * dz;
       if (d < bestD) { bestD = d; best = i; }
     }
-    return best / track.sampled.length;
+    lastTrackIdx = best;
+    return best / n;
   }
 
   function updateLapTracking() {
@@ -1805,7 +1539,7 @@
 
   function advanceToNextStage() {
     currentStageIndex++;
-    resultsEl.style.display = 'none';
+    views.results.hide();
     startCountdown();
   }
 
@@ -1813,12 +1547,12 @@
   function setupInput() {
     window.addEventListener('keydown', function (e) {
       keys[e.code] = true;
-      var authOpen = authEl.classList.contains('visible');
-      var lbOpen = leaderboardEl.style.display === 'flex';
+      var authOpen = views.auth.isOpen();
+      var lbOpen = views.leaderboard.isOpen();
 
       if (e.code === 'Enter' && !authOpen) {
         e.preventDefault();
-        if (gameState === 'menu' && !recordsVisible && !settingsVisible && !lbOpen) {
+        if (gameState === 'menu' && !views.records.isOpen() && !views.settings.isOpen() && !lbOpen) {
           startCountdown();
         } else if (gameState === 'finished') {
           if (seriesMode && currentStageIndex < stageCount - 1) {
@@ -1831,16 +1565,16 @@
 
       if (e.code === 'Escape') {
         e.preventDefault();
-        if (authEl.classList.contains('visible')) {
+        if (authOpen) {
           hideAuthPanel();
-        } else if (leaderboardEl.style.display === 'flex') {
+        } else if (lbOpen) {
           hideLeaderboard();
-          if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
-          else overlay.classList.remove('hidden');
+          if (leaderboardFrom === 'results') views.results.show();
+          else views.menu.show();
           leaderboardFrom = null;
-        } else if (settingsVisible) {
+        } else if (views.settings.isOpen()) {
           hideSettings();
-        } else if (recordsVisible) {
+        } else if (views.records.isOpen()) {
           hideRecords();
         } else if (gameState === 'finished') {
           restartRace();
@@ -1849,7 +1583,7 @@
 
       if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && !authOpen && !lbOpen) {
         e.preventDefault();
-        if (gameState === 'menu' && !recordsVisible && !settingsVisible) {
+        if (gameState === 'menu' && !views.records.isOpen() && !views.settings.isOpen()) {
           startCountdown();
         } else if (gameState === 'racing' || gameState === 'countdown') {
           restartCurrentMap();
@@ -1863,7 +1597,7 @@
       }
 
       if (e.code === 'KeyC' && document.activeElement.tagName !== 'INPUT') {
-        cameraModeIndex = (cameraModeIndex + 1) % CAMERA_MODES.length;
+        cameraModeIndex = (cameraModeIndex + 1) % C.camera.modes.length;
         applyCameraMode();
       }
     });
@@ -2168,21 +1902,21 @@
 
     leaderboardBtn.addEventListener('click', function () {
       leaderboardFrom = 'results';
-      resultsEl.style.display = 'none';
+      views.results.hide();
       showLeaderboard();
     });
     leaderboardMenuBtn.addEventListener('click', function () {
       if (gameState !== 'menu') return;
       leaderboardFrom = 'menu';
       var mode = challengeModeToggle.querySelector('.selected').dataset.val;
-      overlay.classList.add('hidden');
-      leaderboardEl.style.display = 'flex';
+      views.menu.hide();
+      views.leaderboard.show();
       showLeaderboardForChallenge(mode);
     });
     leaderboardBackEl.addEventListener('click', function () {
       hideLeaderboard();
-      if (leaderboardFrom === 'results') resultsEl.style.display = 'flex';
-      else overlay.classList.remove('hidden');
+      if (leaderboardFrom === 'results') views.results.show();
+      else views.menu.show();
       leaderboardFrom = null;
     });
 
@@ -2274,21 +2008,23 @@
     });
   }
 
+  var _input = { accel: 0, steer: 0 };
+
   function getPlayerInput() {
-    if (document.activeElement === trackCodeInput) return { accel: 0, steer: 0 };
-    var accel = 0, steer = 0;
-    if (keys['ArrowUp'] || keys['KeyW']) accel = 1;
-    if (keys['ArrowDown'] || keys['KeyS']) accel = accel === 1 ? 0 : -1;
-    if (keys['ArrowLeft'] || keys['KeyA']) steer = 1;
-    if (keys['ArrowRight'] || keys['KeyD']) steer = -1;
-    return { accel: accel, steer: steer };
+    if (document.activeElement === trackCodeInput) { _input.accel = 0; _input.steer = 0; return _input; }
+    _input.accel = 0; _input.steer = 0;
+    if (keys['ArrowUp'] || keys['KeyW']) _input.accel = 1;
+    if (keys['ArrowDown'] || keys['KeyS']) _input.accel = _input.accel === 1 ? 0 : -1;
+    if (keys['ArrowLeft'] || keys['KeyA']) _input.steer = 1;
+    if (keys['ArrowRight'] || keys['KeyD']) _input.steer = -1;
+    return _input;
   }
 
   // ── HUD ───────────────────────────────────────────────────────────
   function addLapTimeToHUD(lapNum, lapTime) {
     var div = document.createElement('div');
     div.className = 'hud-box';
-    div.style.marginTop = '8px';
+    if (lapNum > 1) div.style.marginTop = '4px';
     var text = 'L' + lapNum + '  ' + formatTime(lapTime);
     if (lapNum > 1) {
       var prevTime = player.lapTimes[lapNum - 2];
@@ -2301,17 +2037,38 @@
     lapTimesList.appendChild(div);
   }
 
+  var _hudLap = -1, _hudBest = -1, _hudStage = -1, _hudSeries = -1;
+
+  function resetHUDCache() {
+    _hudLap = -1; _hudBest = -1; _hudStage = -1; _hudSeries = -1;
+  }
+
   function updateHUD() {
     var displayLap = Math.min(player.lap + 1, totalLaps);
-    lapDisplay.textContent = 'LAP ' + displayLap + ' / ' + totalLaps;
-    bestDisplay.textContent = 'BEST ' + (bestTime ? formatTime(bestTime) : '--:--.--');
+    if (displayLap !== _hudLap) {
+      _hudLap = displayLap;
+      lapDisplay.textContent = 'LAP ' + displayLap + ' / ' + totalLaps;
+    }
+    if (bestTime !== _hudBest) {
+      _hudBest = bestTime;
+      bestDisplay.textContent = 'BEST ' + (bestTime ? formatTime(bestTime) : '--:--.--');
+    }
     timeDisplay.textContent = formatTime(raceTimer);
     speedDisplay.textContent = Math.round(player.speed * 1.2) + ' km/h';
-    if (seriesMode) {
-      stageDisplayEl.style.display = 'block';
-      stageDisplayEl.textContent = 'STAGE ' + (currentStageIndex + 1) + ' / ' + stageCount;
-    } else {
-      stageDisplayEl.style.display = 'none';
+    var stageKey = seriesMode ? currentStageIndex : -1;
+    if (stageKey !== _hudStage || (seriesMode ? 1 : 0) !== _hudSeries) {
+      _hudStage = stageKey;
+      _hudSeries = seriesMode ? 1 : 0;
+      if (seriesMode) {
+        stageDisplayEl.style.display = 'block';
+        stageDisplayEl.textContent = 'STAGE ' + (currentStageIndex + 1) + ' / ' + stageCount;
+        lapDisplay.style.top = '62px';
+        lapTimesList.style.top = '104px';
+      } else {
+        stageDisplayEl.style.display = 'none';
+        lapDisplay.style.top = '20px';
+        lapTimesList.style.top = '62px';
+      }
     }
   }
 
@@ -2327,14 +2084,17 @@
     }
     if (ghostMesh) ghostMesh.visible = true;
     gameState = 'countdown';
-    overlay.classList.add('hidden');
-    accountBar.style.display = 'none';
-    hud.style.display = 'block';
+    views.menu.hide();
+    views.accountBar.hide();
+    raceTimer = 0;
+    lapTimesList.innerHTML = '';
+    views.hud.show();
+    resetHUDCache();
     updateHUD();
     for (var i = 0; i < semLights.length; i++) {
       semLights[i].className = 'sem-light';
     }
-    countdownEl.style.display = 'flex';
+    views.countdown.show();
     countdownTimer = 0;
     countdownValue = 0;
   }
@@ -2362,19 +2122,17 @@
     }
     if (countdownTimer >= 3.6) {
       gameState = 'racing';
-      countdownEl.style.display = 'none';
-      raceTimer = 0;
+      views.countdown.hide();
       recording = [{ x: player.x, z: player.z, a: player.angle }];
       recordAccum = 0;
-      lapTimesList.innerHTML = '';
     }
   }
 
   function showResults() {
     gameState = 'finished';
-    hud.style.display = 'none';
-    accountBar.style.display = '';
-    resultsEl.style.display = 'flex';
+    views.hud.hide();
+    views.accountBar.show();
+    views.results.show();
     resultsList.innerHTML = '';
     leaderboardBtn.style.display = challengeMode ? '' : 'none';
 
@@ -2504,8 +2262,6 @@
     return m + ':' + sec;
   }
 
-  var SHARE_BASE = 'https://carreritas.vercel.app/';
-
   function shareURL() {
     if (seriesMode) {
       var descs = [];
@@ -2513,53 +2269,16 @@
         var sr = seriesResults[i];
         descs.push(formatDescriptor(sr.code, sr.reversed, sr.nightMode, totalLaps));
       }
-      return SHARE_BASE + '?s=' + encodeURIComponent(descs.join(','));
+      return C.share.base + '?s=' + encodeURIComponent(descs.join(','));
     }
-    return SHARE_BASE + '?t=' + encodeURIComponent(formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps));
+    return C.share.base + '?t=' + encodeURIComponent(formatDescriptor(currentTrackCode, reversed, nightMode, totalLaps));
   }
-
-  var SHARE_OPENERS = [
-    'Just set this time.',
-    'Not bad, right?',
-    'Could\'ve been worse.',
-    'Not my best run... or is it?',
-    'Look at this.'
-  ];
-  var SHARE_OPENERS_RECORD = [
-    'New record. No big deal.',
-    'Just casually dropped a record.',
-    'Personal best. I make it look easy.',
-    'Record broken. Again.',
-    'Peak performance.',
-    'Cinema.',
-    'This is giving main character energy.',
-    'No cap, that was clean.',
-    'Lowkey ate that.',
-    'Slay.'
-  ];
-  var SHARE_CLOSERS = [
-    'Think you can beat me?',
-    'Your turn.',
-    'No pressure.',
-    'Your move.',
-    'Beat that.'
-  ];
-  var SHARE_CLOSERS_RECORD = [
-    'Good luck beating this.',
-    'Try to do better, I dare you.',
-    'I\'ll wait.',
-    'Don\'t even bother.',
-    'Set the bar. Your problem now.',
-    'It\'s giving unbeatable.',
-    'Rent free in the leaderboard.',
-    'Stay mad.'
-  ];
 
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
   function buildShareText() {
-    var openers = lastRaceWasRecord ? SHARE_OPENERS_RECORD : SHARE_OPENERS;
-    var closers = lastRaceWasRecord ? SHARE_CLOSERS_RECORD : SHARE_CLOSERS;
+    var openers = lastRaceWasRecord ? C.share.openersRecord : C.share.openers;
+    var closers = lastRaceWasRecord ? C.share.closersRecord : C.share.closers;
     var lines = [pick(openers), ''];
 
     if (challengeMode) lines.push(challengeLabel(challengeMode));
@@ -2590,31 +2309,33 @@
   }
 
   function restartCurrentMap() {
-    resultsEl.style.display = 'none';
-    if (player) { scene.remove(player.mesh); player = null; }
+    views.results.hide();
+    if (player) { disposeGroup(player.mesh); scene.remove(player.mesh); player = null; }
     createPlayer();
     createGhost();
     if (ghostMesh) ghostMesh.visible = true;
     gameState = 'countdown';
-    overlay.classList.add('hidden');
-    accountBar.style.display = 'none';
-    hud.style.display = 'block';
-    for (var i = 0; i < semLights.length; i++) {
-      semLights[i].className = 'sem-light';
-    }
-    countdownEl.style.display = 'flex';
-    countdownTimer = 0;
-    countdownValue = 0;
+    views.menu.hide();
+    views.accountBar.hide();
     raceTimer = 0;
     recording = [];
     recordAccum = 0;
     lapTimesList.innerHTML = '';
+    views.hud.show();
+    resetHUDCache();
+    updateHUD();
+    for (var i = 0; i < semLights.length; i++) {
+      semLights[i].className = 'sem-light';
+    }
+    views.countdown.show();
+    countdownTimer = 0;
+    countdownValue = 0;
   }
 
   function restartRace() {
-    resultsEl.style.display = 'none';
-    overlay.classList.remove('hidden');
-    accountBar.style.display = '';
+    views.results.hide();
+    views.menu.show();
+    views.accountBar.show();
     gameState = 'menu';
     currentStageIndex = 0;
     seriesResults = [];
@@ -2695,11 +2416,10 @@
   }
 
   function showRecords() {
-    if (settingsVisible) hideSettings();
+    if (views.settings.isOpen()) hideSettings();
     recordsListEl.innerHTML = '';
-    overlay.classList.add('hidden');
-    recordsEl.classList.remove('hidden');
-    recordsVisible = true;
+    views.menu.hide();
+    views.records.show();
 
     session.getAllBestTimes(function (records) {
       renderRecords(records);
@@ -2728,17 +2448,15 @@
     seriesConfigEl.style.display = 'none';
     lapsLabel.textContent = 'LAPS';
 
-    recordsEl.classList.add('hidden');
-    recordsVisible = false;
+    views.records.hide();
 
     rebuildTrack(rec.code);
     startCountdown();
   }
 
   function hideRecords() {
-    recordsEl.classList.add('hidden');
-    overlay.classList.remove('hidden');
-    recordsVisible = false;
+    views.records.hide();
+    views.menu.show();
   }
 
   // ── Settings ────────────────────────────────────────────────────────
@@ -2826,8 +2544,8 @@
 
   function buildPatternButtons() {
     patternOptionsEl.innerHTML = '';
-    for (var i = 0; i < PATTERNS.length; i++) {
-      var p = PATTERNS[i];
+    for (var i = 0; i < C.car.patterns.length; i++) {
+      var p = C.car.patterns[i];
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'pattern-btn' + (p === carSettings.pattern ? ' selected' : '');
@@ -2851,6 +2569,7 @@
 
   function applyCarSettings() {
     if (!player) return;
+    disposeGroup(player.mesh);
     scene.remove(player.mesh);
     var mesh = createCarMesh({
       color: hexToInt(carSettings.primaryColor),
@@ -2870,18 +2589,18 @@
     showcaseBtn.dataset.val = 'showcase';
     showcaseBtn.textContent = 'SHOWCASE';
     previewCameraToggle.appendChild(showcaseBtn);
-    for (var i = 0; i < CAMERA_MODES.length; i++) {
+    for (var i = 0; i < C.camera.modes.length; i++) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'seg-option' + (!showcaseActive && i === cameraModeIndex ? ' selected' : '');
       btn.dataset.val = String(i);
-      btn.textContent = CAMERA_MODES[i];
+      btn.textContent = C.camera.modes[i];
       previewCameraToggle.appendChild(btn);
     }
   }
 
   function showSettings() {
-    if (recordsVisible) hideRecords();
+    if (views.records.isOpen()) hideRecords();
     colorPrimaryEl.value = carSettings.primaryColor;
     colorSecondaryEl.value = carSettings.secondaryColor;
     colorHeadlightsEl.value = carSettings.headlightsColor;
@@ -2910,11 +2629,10 @@
     if (driveSel) driveSel.classList.remove('selected');
     previewDriveToggle.querySelector('[data-val="IDLE"]').classList.add('selected');
 
-    overlay.classList.add('hidden');
-    accountBar.style.display = 'none';
-    settingsEl.classList.remove('hidden');
+    views.menu.hide();
+    views.accountBar.hide();
+    views.settings.show();
     settingsBackEl.style.display = '';
-    settingsVisible = true;
   }
 
   function switchPreviewToNight() {
@@ -2940,16 +2658,15 @@
       player.mesh.position.set(player.x, 0, player.z);
       player.mesh.rotation.y = player.angle;
     }
-    settingsEl.classList.add('hidden');
+    views.settings.hide();
     settingsBackEl.style.display = 'none';
-    accountBar.style.display = '';
-    overlay.classList.remove('hidden');
-    settingsVisible = false;
+    views.accountBar.show();
+    views.menu.show();
   }
 
   function updatePreviewDrive(dt) {
     if (!player || !track) return;
-    previewT = (previewT + PREVIEW_SPEED * dt) % 1;
+    previewT = (previewT + C.camera.previewSpeed * dt) % 1;
     var pt = track.curve.getPointAt(previewT);
     var tan = track.curve.getTangentAt(previewT);
     player.x = pt.x;
@@ -2978,25 +2695,25 @@
     camera = perspCamera;
 
     showcaseTimer += dt;
-    var shot = SHOWCASE_SHOTS[showcaseTimer < 0 ? 0 : showcaseShotIndex];
+    var shot = C.camera.showcase.shots[showcaseTimer < 0 ? 0 : showcaseShotIndex];
     var elapsed = showcaseTimer;
 
     if (elapsed >= shot.duration) {
       showcaseTimer = 0;
       elapsed = 0;
-      showcaseShotIndex = (showcaseShotIndex + 1) % SHOWCASE_SHOTS.length;
-      shot = SHOWCASE_SHOTS[showcaseShotIndex];
+      showcaseShotIndex = (showcaseShotIndex + 1) % C.camera.showcase.shots.length;
+      shot = C.camera.showcase.shots[showcaseShotIndex];
     }
 
     var angleOffset = showcaseShotIndex * 1.8;
     var pos = showcaseShotPosition(shot, elapsed, angleOffset);
 
-    if (elapsed < SHOWCASE_TRANSITION) {
-      var prevIndex = (showcaseShotIndex - 1 + SHOWCASE_SHOTS.length) % SHOWCASE_SHOTS.length;
-      var prevShot = SHOWCASE_SHOTS[prevIndex];
+    if (elapsed < C.camera.showcase.transition) {
+      var prevIndex = (showcaseShotIndex - 1 + C.camera.showcase.shots.length) % C.camera.showcase.shots.length;
+      var prevShot = C.camera.showcase.shots[prevIndex];
       var prevAngle = prevIndex * 1.8;
       var prevPos = showcaseShotPosition(prevShot, prevShot.duration, prevAngle);
-      var t = elapsed / SHOWCASE_TRANSITION;
+      var t = elapsed / C.camera.showcase.transition;
       t = t * t * (3 - 2 * t);
       pos.x = prevPos.x + (pos.x - prevPos.x) * t;
       pos.y = prevPos.y + (pos.y - prevPos.y) * t;
@@ -3009,17 +2726,17 @@
   }
 
   function updateCamera() {
-    var mode = CAMERA_MODES[cameraModeIndex];
+    var mode = C.camera.modes[cameraModeIndex];
     if (mode === 'TOP-DOWN') {
       camera.position.x += (player.x - camera.position.x) * 0.08;
       camera.position.z += (player.z - camera.position.z) * 0.08;
-      camera.position.y = CAMERA_HEIGHT;
+      camera.position.y = C.camera.height;
       camera.up.set(0, 0, -1);
       camera.lookAt(camera.position.x, 0, camera.position.z);
     } else if (mode === 'ROTATED') {
       camera.position.x += (player.x - camera.position.x) * 0.08;
       camera.position.z += (player.z - camera.position.z) * 0.08;
-      camera.position.y = CAMERA_HEIGHT;
+      camera.position.y = C.camera.height;
       camera.up.set(-Math.sin(player.angle), 0, -Math.cos(player.angle));
       camera.lookAt(camera.position.x, 0, camera.position.z);
     } else if (mode === 'CHASE') {
@@ -3047,13 +2764,13 @@
   }
 
   function applyCameraMode() {
-    var mode = CAMERA_MODES[cameraModeIndex];
+    var mode = C.camera.modes[cameraModeIndex];
     if (mode === 'CHASE') {
       camera = perspCamera;
     } else {
       camera = orthoCamera;
       var aspect = window.innerWidth / window.innerHeight;
-      var vs = (mode === 'ISOMETRIC') ? VIEW_SIZE * 1.4 : VIEW_SIZE;
+      var vs = (mode === 'ISOMETRIC') ? C.camera.viewSize * 1.4 : C.camera.viewSize;
       var hw = vs / 2, hh = hw / aspect;
       orthoCamera.left = -hw;
       orthoCamera.right = hw;
@@ -3063,7 +2780,7 @@
     }
     if (player) {
       if (mode === 'TOP-DOWN' || mode === 'ROTATED') {
-        camera.position.set(player.x, CAMERA_HEIGHT, player.z);
+        camera.position.set(player.x, C.camera.height, player.z);
       } else if (mode === 'CHASE') {
         camera.position.set(
           player.x - Math.sin(player.angle) * 60, 35,
@@ -3146,15 +2863,15 @@
     var fade = carSettings.underglowOpacity / 100;
 
     var inner = new THREE.Mesh(
-      new THREE.CircleGeometry(CAR_RADIUS * 1.05, segments),
+      new THREE.CircleGeometry(C.car.radius * 1.05, segments),
       new THREE.MeshBasicMaterial({ color: colorInt, transparent: true, opacity: 0.45 * fade, depthWrite: false })
     );
     inner.rotation.x = -Math.PI / 2;
     inner.position.y = 0.04;
     group.add(inner);
 
-    var edgeR = CAR_RADIUS * 0.9;
-    var outerR = CAR_RADIUS * 2.7;
+    var edgeR = C.car.radius * 0.9;
+    var outerR = C.car.radius * 2.7;
     var positions = [];
     var colors = [];
     var indices = [];
@@ -3214,6 +2931,11 @@
   }
 
   function rebuildLightMeshes() {
+    disposeMesh(beamMeshL);
+    disposeMesh(beamMeshR);
+    disposeMesh(glowMesh);
+    disposeMesh(tailMesh);
+    disposeGroup(underglowMesh);
     scene.remove(beamMeshL, beamMeshR, glowMesh, tailMesh, underglowMesh, underglowLight);
 
     var hlRgb = hexToRgb(carSettings.headlightsColor);
@@ -3235,14 +2957,21 @@
     underglowMesh.visible = false;
   }
 
-  function updateNightMode() {
+  var prevNightState = null;
+
+  function applyNightToggle() {
     var isNight = nightMode;
     ambientLight.intensity = isNight ? 0 : 1.0;
     scene.background.set(isNight ? 0x000000 : 0x5d8a4a);
     carPointLight.intensity = isNight ? 0.8 : 0;
+    prevNightState = isNight;
+  }
+
+  function updateNightMode() {
+    if (nightMode !== prevNightState) applyNightToggle();
 
     var hasPlayer = !!player;
-    var showBeams = isNight && hasPlayer;
+    var showBeams = nightMode && hasPlayer;
     beamMeshL.visible = showBeams;
     beamMeshR.visible = showBeams;
     glowMesh.visible = showBeams;
@@ -3260,7 +2989,7 @@
 
     if (!showBeams) return;
 
-    var headlightFwd = CAR_RADIUS * 0.6;
+    var headlightFwd = C.car.radius * 0.6;
 
     beamMeshL.position.set(player.x + fx * headlightFwd, 0, player.z + fz * headlightFwd);
     beamMeshL.rotation.y = player.angle - 0.06;
@@ -3268,7 +2997,7 @@
     beamMeshR.rotation.y = player.angle + 0.06;
 
     glowMesh.position.set(player.x, 0, player.z);
-    tailMesh.position.set(player.x - fx * CAR_RADIUS, 0, player.z - fz * CAR_RADIUS);
+    tailMesh.position.set(player.x - fx * C.car.radius, 0, player.z - fz * C.car.radius);
 
     carPointLight.position.set(player.x, 8, player.z);
   }
@@ -3305,7 +3034,7 @@
       updateHUD();
     }
 
-    if (settingsVisible && previewRunning) {
+    if (views.settings.isOpen() && previewRunning) {
       updatePreviewDrive(dt);
     }
 
@@ -3329,27 +3058,30 @@
     scene.background = new THREE.Color(0x5d8a4a);
 
     var aspect = window.innerWidth / window.innerHeight;
-    var halfW = VIEW_SIZE / 2;
+    var halfW = C.camera.viewSize / 2;
     var halfH = halfW / aspect;
     orthoCamera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 1000);
-    orthoCamera.position.set(0, CAMERA_HEIGHT, 0);
+    orthoCamera.position.set(0, C.camera.height, 0);
     orthoCamera.up.set(0, 0, -1);
     orthoCamera.lookAt(0, 0, 0);
     perspCamera = new THREE.PerspectiveCamera(70, aspect, 1, 2000);
     camera = orthoCamera;
-    cameraDisplayEl.textContent = CAMERA_MODES[cameraModeIndex];
+    cameraDisplayEl.textContent = C.camera.modes[cameraModeIndex];
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.prepend(renderer.domElement);
     setupLights();
 
     var ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000, 2000, 40, 40),
+      new THREE.PlaneGeometry(2000, 2000),
       new THREE.MeshLambertMaterial({ color: 0x5d8a4a })
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.matrixAutoUpdate = false;
+    ground.frustumCulled = false;
+    ground.updateMatrix();
     scene.add(ground);
 
     var startCode = randomCode();
@@ -3409,7 +3141,7 @@
 
     window.addEventListener('resize', function () {
       var a = window.innerWidth / window.innerHeight;
-      var vs = (CAMERA_MODES[cameraModeIndex] === 'ISOMETRIC') ? VIEW_SIZE * 1.4 : VIEW_SIZE;
+      var vs = (C.camera.modes[cameraModeIndex] === 'ISOMETRIC') ? C.camera.viewSize * 1.4 : C.camera.viewSize;
       var hw = vs / 2, hh = hw / a;
       orthoCamera.left = -hw; orthoCamera.right = hw;
       orthoCamera.top = hh; orthoCamera.bottom = -hh;
