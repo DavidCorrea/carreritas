@@ -4,7 +4,7 @@
 
 The game loads `three.min.js` from CDN at version 0.150.0. Three.js warns that `build/three.js` and `build/three.min.js` are deprecated as of r150 and will be removed in r160. The migration path is ES Modules.
 
-**Where:** `index.html` line 975 (script tag)
+**Where:** `index.html` (Three.js `<script>` before `main.js`)
 **Why it matters:** The CDN URL will stop working when Three.js removes the legacy build files.
 
 ## No test infrastructure
@@ -114,5 +114,17 @@ The server only stores competitive data: race challenge best times (in `best_tim
 
 Ghost replays already use delta encoding, quantization (positions ×10, angles ×100), and flat packed arrays — dropping timestamps and JSON overhead. The remaining optimization is reducing the sample rate from 10/sec (`RECORD_INTERVAL = 0.1`) to 5/sec (200ms). This would halve frame count with negligible visual impact on interpolation.
 
-**Where:** `src/game.js` `RECORD_INTERVAL` constant
-**Why it matters:** Halves per-replay size in localStorage and future server storage. Worth doing before adding ghost sync.
+**Where:** `Constants.track.recordInterval` in `src/constants.js` (currently `0.1` → 10 samples/sec)
+**Why it matters:** Halves per-replay size in localStorage and future server storage. Worth doing before ghost sync.
+
+## `Game` orchestrator size (`game.js`)
+
+`Game` remains the composition root (scene, loop, `StateMachine`, API/session). Challenge seeding, track descriptors, and share/results assembly have moved to `src/utils/challenge-seed.js`, `src/utils/track-descriptor.js`, and `src/ui/results-presenter.js`; race timing/recording lives in `src/race.js`; device input is split in `src/input-controllers/`.
+
+**Still worth tightening (when touching related code):**
+
+- **Menu + track sync:** repeated `clearChallengeMode()`, menu-visible `rebuildTrack`, and lap/stage clamping in menu callbacks — a small helper could reduce duplication.
+- **Leaderboard fetch + render:** the async fetch → `LeaderboardPanel.render` pattern with repeated `.bind` could be wrapped once (e.g. panel takes profile/auth handles).
+
+**Where:** `src/game.js`, `src/ui/leaderboard-panel.js`, menu wiring
+**Why it matters:** Less noise in the orchestrator makes state transitions and track lifecycle easier to follow.

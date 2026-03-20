@@ -36,9 +36,17 @@ A sequence of 2–5 races (stages) played back-to-back. Each stage has its own t
 
 One race within a series. Configured independently for track code, direction, and mode.
 
+## Game States
+
+The client uses a small state machine (`Menu` → `Countdown` → `Racing` → `Finished`, with transitions back to menu). Each state receives the `Game` instance and `InputContext` for keyboard/touch. Implemented by `StateMachine` and state classes under `game-states/`.
+
+## Run Context
+
+Whether the current session is a free **event** run (custom track/series) or a **challenge** (daily/weekly race or series). `RunContext` subclasses adjust leaderboard routing, challenge keys, share text, and optional series time submission. Switching away from a challenge’s configuration clears challenge mode.
+
 ## Challenge Modes
 
-Four time-limited challenge modes where every player gets the same configuration. All use the same PRNG seeding mechanism (mulberry32).
+Four time-limited challenge modes where every player gets the same configuration. All use the same PRNG seeding mechanism (`mulberry32` in `utils/challenge-seed.js`).
 
 - **Daily Race** — a single race generated from the current UTC date string. The seed is the bare date (`"2026-03-18"`) for backward compatibility with the original daily track. Produces track code, direction, mode, and laps.
 - **Daily Series** — a multi-stage series generated from `"ds-" + dateStr`. Produces stage count (2–5), per-stage track code/direction/mode, and laps per stage.
@@ -53,13 +61,13 @@ An identifier for a challenge instance, used to store and query series total tim
 
 ## Daily Track
 
-A race configuration (track code, direction, mode, laps) deterministically generated from the current UTC date. The date string is hashed into a seed for a PRNG (mulberry32), so every player gets the exact same race on the same day — no backend needed. Now part of the Challenge Modes system as "Daily Race".
+A race configuration (track code, direction, mode, laps) deterministically generated from the current UTC date. The date string is hashed into a seed for a PRNG (mulberry32 in `challenge-seed.js`), so every player gets the exact same race on the same day — no backend needed. Now part of the Challenge Modes system as "Daily Race".
 
 ## Car Settings
 
 Player-configurable car appearance, persisted in localStorage. Includes:
 
-- **Pattern** — how primary and secondary colors are applied to the car body. Options: solid, ring, half, stripe, gradient, radial, spiral, dots, bullseye.
+- **Pattern** — how primary and secondary colors are applied to the car body. Options: solid, ring, half, stripe, gradient, radial, spiral, dots, bullseye (each implemented as a `CarPattern` class in `car-patterns/`).
 - **Primary / Secondary Color** — two colors used by the selected pattern.
 - **Headlights Color** — affects the visible beam and glow meshes only, not the scene's ambient point light (which stays warm white).
 - **Headlight Shape** — a ratio between beam length and width. Low values produce long narrow beams; high values produce short wide beams.
