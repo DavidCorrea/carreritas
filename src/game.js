@@ -40,6 +40,26 @@ import { strings } from './strings.js';
 const _previewPt = new THREE.Vector3();
 const _previewTan = new THREE.Vector3();
 
+/**
+ * Fullscreen modals: blur the WebGL layer (backdrop-filter does not sample canvas reliably).
+ * Car settings (#settings) is excluded: the menu is hidden while it is open and the scene must stay sharp.
+ */
+function _isAnyModalOpenForBackdrop() {
+  const overlay = document.getElementById('overlay');
+  const results = document.getElementById('results');
+  const leaderboard = document.getElementById('leaderboard');
+  const records = document.getElementById('records');
+  const auth = document.getElementById('auth');
+  if (!overlay || !results || !leaderboard || !records || !auth) return false;
+  return (
+    !overlay.classList.contains('hidden') ||
+    results.style.display === 'flex' ||
+    leaderboard.style.display === 'flex' ||
+    !records.classList.contains('hidden') ||
+    auth.classList.contains('visible')
+  );
+}
+
 export default class Game {
   constructor() {
     this._initRaceAndPreviewState();
@@ -817,7 +837,13 @@ export default class Game {
     } else if (THREE.sRGBEncoding !== undefined) {
       this.renderer.outputEncoding = THREE.sRGBEncoding;
     }
-    document.body.prepend(this.renderer.domElement);
+    const gameView = document.createElement('div');
+    gameView.id = 'game-view';
+    gameView.setAttribute('aria-hidden', 'true');
+    gameView.appendChild(this.renderer.domElement);
+    document.body.prepend(gameView);
+    this._setupGameBackdropSync(gameView);
+
     this.sceneRenderer = this.mode.isNight() ? new NightRenderer(this.scene, this.carSettings) : new DayRenderer(this.scene, this.carSettings);
 
     const ground = new THREE.Mesh(
@@ -829,6 +855,20 @@ export default class Game {
     ground.frustumCulled = false;
     ground.updateMatrix();
     this.scene.add(ground);
+  }
+
+  _setupGameBackdropSync(gameView) {
+    const sync = () => {
+      gameView.classList.toggle('game-blurred', _isAnyModalOpenForBackdrop());
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    const opts = { attributes: true, attributeFilter: ['class', 'style'] };
+    const ids = ['overlay', 'results', 'leaderboard', 'records', 'auth'];
+    for (let i = 0; i < ids.length; i++) {
+      const el = document.getElementById(ids[i]);
+      if (el) mo.observe(el, opts);
+    }
   }
 
   _consumeShareUrlParams() {

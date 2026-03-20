@@ -1,7 +1,25 @@
 html { font-size: 16px; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { overflow: hidden; background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-canvas { display: block; }
+/* Blur applied here so it affects WebGL; backdrop-filter on overlays does not sample the canvas reliably. */
+#game-view {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  transition: filter 0.3s ease;
+}
+#game-view.game-blurred {
+  filter: blur(1.25rem);
+  -webkit-filter: blur(1.25rem);
+}
+@media (prefers-reduced-motion: reduce) {
+  #game-view { transition: none; }
+  #game-view.game-blurred {
+    filter: none;
+    -webkit-filter: none;
+  }
+}
+#game-view canvas { display: block; }
 
 #hud {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -49,9 +67,7 @@ body.mobile #speed-display {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(1.25rem);
-  -webkit-backdrop-filter: blur(1.25rem);
+  background: rgba(0, 0, 0, 0.475);
   transition: opacity 0.3s;
   z-index: 30;
   overflow-y: auto; padding: 2.5rem 1.25rem;
@@ -313,9 +329,7 @@ body.mobile #speed-display {
   position: absolute; inset: 0;
   display: none; flex-direction: column;
   align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(1.25rem);
-  -webkit-backdrop-filter: blur(1.25rem);
+  background: rgba(0, 0, 0, 0.775);
   z-index: 30;
 }
 #results h2 {
@@ -448,9 +462,7 @@ body.mobile #speed-display {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(1.25rem);
-  -webkit-backdrop-filter: blur(1.25rem);
+  background: rgba(0, 0, 0, 0.775);
   transition: opacity 0.3s;
   z-index: 30;
   overflow-y: auto; padding: 2.5rem 1.25rem;
@@ -542,7 +554,7 @@ body.mobile #speed-display {
 #settings {
   position: absolute; left: 0; right: 0; top: 0;
   display: flex; flex-direction: column; align-items: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.725);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   transition: opacity 0.3s;
   z-index: 30;
@@ -649,9 +661,7 @@ body.mobile #speed-display {
   position: absolute; inset: 0;
   display: none; flex-direction: column;
   align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(1.25rem);
-  -webkit-backdrop-filter: blur(1.25rem);
+  background: rgba(0, 0, 0, 0.775);
   z-index: 40;
 }
 #auth.visible { display: flex; }
@@ -722,9 +732,7 @@ body.mobile #speed-display {
   position: absolute; inset: 0;
   display: none; flex-direction: column;
   align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(1.25rem);
-  -webkit-backdrop-filter: blur(1.25rem);
+  background: rgba(0, 0, 0, 0.775);
   z-index: 30;
   overflow-y: auto; padding: 2.5rem 1.25rem;
 }
