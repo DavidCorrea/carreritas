@@ -2,6 +2,7 @@ import Renderer from './renderer.js';
 import Constants from '../constants.js';
 import { CAMERA_HEIGHT } from '../intrinsic-constants.js';
 import { hexToInt, hexToRgb, disposeMesh, disposeGroup } from '../utils/index.js';
+import { createUnderglowMesh, applyUnderglowAppearance } from './underglow-mesh.js';
 
 /** Indices in `Constants.camera.modes`: TOP-DOWN, ROTATED, CHASE, FIRST-PERSON, ISOMETRIC */
 const CHASE_CAMERA_MODE_INDEX = 2;
@@ -24,6 +25,9 @@ const NONCHASE_FOG_DENSITY_BOOST = 1.14;
 const NONCHASE_POINT_LIGHT_SCALE = 0.9;
 
 const NIGHT_BG_COLOR = 0x010102;
+
+/** Transparent ground decals share the car’s XZ; sort order can flip frame-to-frame vs the track and car. */
+const GROUND_DECAL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
 
 /** Isometric shows a huge ground area; keep night tight: heavy fog, low fill, small headlight pool. */
 const ISOMETRIC_NIGHT_AMBIENT = 0.038;
@@ -71,12 +75,14 @@ function createBeamMesh(length, halfAngle, rgb) {
   geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geom.setIndex(indices);
 
-  return new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial(Object.assign({
     vertexColors: true,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false
-  }));
+  }, GROUND_DECAL_OFFSET)));
+  mesh.renderOrder = 4;
+  return mesh;
 }
 
 function createGlowMesh(radius, r, g, b) {
@@ -100,55 +106,14 @@ function createGlowMesh(radius, r, g, b) {
   geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geom.setIndex(indices);
 
-  return new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial(Object.assign({
     vertexColors: true,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false
-  }));
-}
-
-function createUnderglowMesh(color, underglowOpacity) {
-  const group = new THREE.Group();
-  const segments = 40;
-  const rgb = hexToRgb(color);
-  const colorInt = hexToInt(color);
-  const fade = underglowOpacity / 100;
-
-  const inner = new THREE.Mesh(
-    new THREE.CircleGeometry(Constants.car.radius * 1.05, segments),
-    new THREE.MeshBasicMaterial({ color: colorInt, transparent: true, opacity: 0.45 * fade, depthWrite: false })
-  );
-  inner.rotation.x = -Math.PI / 2;
-  inner.position.y = 0.04;
-  group.add(inner);
-
-  const edgeR = Constants.car.radius * 0.9;
-  const outerR = Constants.car.radius * 2.7;
-  const positions = [];
-  const colors = [];
-  const indices = [];
-  for (let i = 0; i <= segments; i++) {
-    const a = (i / segments) * Math.PI * 2;
-    const cx = Math.cos(a), cz = Math.sin(a);
-    positions.push(cx * edgeR, 0.05, cz * edgeR);
-    colors.push(rgb.r * 1.2 * fade, rgb.g * 1.2 * fade, rgb.b * 1.2 * fade);
-    positions.push(cx * outerR, 0.05, cz * outerR);
-    colors.push(0, 0, 0);
-  }
-  for (let k = 0; k < segments; k++) {
-    const b = k * 2;
-    indices.push(b, b + 1, b + 2, b + 2, b + 1, b + 3);
-  }
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geom.setIndex(indices);
-  group.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
-  })));
-
-  return group;
+  }, GROUND_DECAL_OFFSET)));
+  mesh.renderOrder = 5;
+  return mesh;
 }
 
 function headlightParams(headlightShape) {
@@ -274,9 +239,6 @@ export default class NightRenderer extends Renderer {
 
   updateColors(carSettings) {
     const hlRgb = hexToRgb(carSettings.headlightsColor);
-    const ugRgb = hexToRgb(carSettings.underglowColor);
-    const ugFade = carSettings.underglowOpacity / 100;
-    const ugColorInt = hexToInt(carSettings.underglowColor);
 
     const beamAttrL = this.beamMeshL.geometry.getAttribute('color');
     beamAttrL.setXYZ(0, hlRgb.r, hlRgb.g, hlRgb.b);
@@ -289,18 +251,7 @@ export default class NightRenderer extends Renderer {
     glowAttr.setXYZ(0, hlRgb.r * 0.4, hlRgb.g * 0.3, hlRgb.b * 0.1);
     glowAttr.needsUpdate = true;
 
-    const innerMesh = this.underglowMesh.children[0];
-    innerMesh.material.color.setHex(ugColorInt);
-    innerMesh.material.opacity = 0.45 * ugFade;
-
-    const outerMesh = this.underglowMesh.children[1];
-    const outerAttr = outerMesh.geometry.getAttribute('color');
-    for (let i = 0; i <= 40; i++) {
-      outerAttr.setXYZ(i * 2, ugRgb.r * 1.2 * ugFade, ugRgb.g * 1.2 * ugFade, ugRgb.b * 1.2 * ugFade);
-    }
-    outerAttr.needsUpdate = true;
-
-    this.underglowLight.color.setHex(ugColorInt);
+    applyUnderglowAppearance(this.underglowMesh, this.underglowLight, carSettings);
 
     if (this.fpHeadlightSpot) {
       this.fpHeadlightSpot.color.setHex(hexToInt(carSettings.headlightsColor));

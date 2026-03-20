@@ -153,7 +153,7 @@ export default class Game {
     this.session.saveSettings(settingsToSave);
   }
 
-  /** At most one NightRenderer.updateColors per frame while scrubbing underglow opacity. */
+  /** At most one `sceneRenderer.updateColors` per frame while scrubbing underglow opacity. */
   _scheduleUnderglowColorPreviewUpdate() {
     if (this._underglowColorRaf) return;
     this._underglowColorRaf = requestAnimationFrame(() => {
@@ -1503,7 +1503,6 @@ export default class Game {
 
   _tickSceneRenderer() {
     if (!this.sceneRenderer) return;
-    if (!this.mode.isNight()) return;
     this.sceneRenderer.update(this.player, this.carSettings.underglowOpacity, this.cam.getModeIndex());
   }
 

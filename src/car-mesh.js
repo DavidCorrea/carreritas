@@ -48,10 +48,20 @@ export class CarMesh extends THREE.Group {
     if (!this.transparent) {
       const shadow = new THREE.Mesh(
         sharedGeom.shadow,
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15 })
+        new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          transparent: true,
+          opacity: 0.15,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -4,
+          polygonOffsetUnits: -4
+        })
       );
       shadow.rotation.x = -Math.PI / 2;
-      shadow.position.set(1, 0.005, -1);
+      // Track surface is y≈0.01; keep decal above it to avoid z-fighting (was 0.005, below the road).
+      shadow.position.set(1, 0.012, -1);
+      shadow.renderOrder = 1;
       this.add(shadow);
     }
   }

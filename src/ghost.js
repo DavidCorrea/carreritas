@@ -41,7 +41,12 @@ export default class Ghost {
       return;
     }
 
-    const frac = frameTime - i;
+    let frac = frameTime - i;
+    // First interval: linear lerp acts like constant speed from grid to the ~0.1s sample; the car
+    // actually accelerates from rest, so the chord overshoots and the ghost “jumps” when the race starts.
+    if (i === 0) {
+      frac *= frac;
+    }
     const fa = this.replay[i], fb = this.replay[i + 1];
 
     const x = fa.x + (fb.x - fa.x) * frac;

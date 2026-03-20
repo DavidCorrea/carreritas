@@ -105,6 +105,9 @@ export class CountdownState extends GameState {
       context.currentRun.beginRecordingFromPlayer(context.player);
       context.transitionToRacing();
     }
+    if (context.ghost.replay && context.ghost.replay.length > 1) {
+      context.ghost.update(0);
+    }
     context.sceneDirty = true;
   }
 }
