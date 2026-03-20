@@ -1,13 +1,13 @@
-var jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 
-var SECRET = process.env.JWT_SECRET;
+const SECRET = process.env.JWT_SECRET;
 
 function createToken(userId, username) {
-  return jwt.sign({ id: userId, username: username }, SECRET, { expiresIn: '30d' });
+  return jwt.sign({ id: userId, username }, SECRET, { expiresIn: '30d' });
 }
 
 function verifyToken(req) {
-  var header = req.headers.authorization;
+  const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return null;
   try {
     return jwt.verify(header.slice(7), SECRET);

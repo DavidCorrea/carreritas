@@ -1,4 +1,10 @@
-export var C = {
+import { CAR_RADIUS, CAMERA_HEIGHT } from './intrinsic-constants.js';
+import { TopDownMode, RotatedMode, ChaseMode, IsometricMode } from './camera-modes/index.js';
+import { SolidPattern, RingPattern, HalfPattern, StripePattern, GradientPattern, RadialPattern, SpiralPattern, DotsPattern, BullseyePattern } from './car-patterns/index.js';
+
+const MENU_PREVIEW_FPS = 60;
+
+const Constants = {
   physics: {
     maxSpeed: 280,
     acceleration: 200,
@@ -9,11 +15,11 @@ export var C = {
   },
 
   car: {
-    radius: 6,
+    radius: CAR_RADIUS,
     ghostColor: 0x4da6e8,
-    patterns: ['solid', 'ring', 'half', 'stripe', 'gradient', 'radial', 'spiral', 'dots', 'bullseye'],
+    patterns: [new SolidPattern(), new RingPattern(), new HalfPattern(), new StripePattern(), new GradientPattern(), new RadialPattern(), new SpiralPattern(), new DotsPattern(), new BullseyePattern()],
     defaultSettings: {
-      pattern: 'solid',
+      pattern: null, // Will be set to patterns[0] after initialization
       primaryColor: '#e84d4d',
       secondaryColor: '#ffffff',
       headlightsColor: '#ffe0a0',
@@ -31,8 +37,8 @@ export var C = {
 
   camera: {
     viewSize: 450,
-    height: 300,
-    modes: ['TOP-DOWN', 'ROTATED', 'CHASE', 'ISOMETRIC'],
+    height: CAMERA_HEIGHT,
+    modes: [new TopDownMode(), new RotatedMode(), new ChaseMode(), new IsometricMode()],
     previewSpeed: 0.05,
     showcase: {
       shots: [
@@ -52,44 +58,18 @@ export var C = {
   },
 
   share: {
-    base: 'https://carreritas.vercel.app/',
-    openers: [
-      'Just set this time.',
-      'Not bad, right?',
-      'Could\'ve been worse.',
-      'Not my best run... or is it?',
-      'Look at this.'
-    ],
-    openersRecord: [
-      'New record. No big deal.',
-      'Just casually dropped a record.',
-      'Personal best. I make it look easy.',
-      'Record broken. Again.',
-      'Peak performance.',
-      'Cinema.',
-      'This is giving main character energy.',
-      'No cap, that was clean.',
-      'Lowkey ate that.',
-      'Slay.'
-    ],
-    closers: [
-      'Think you can beat me?',
-      'Your turn.',
-      'No pressure.',
-      'Your move.',
-      'Beat that.'
-    ],
-    closersRecord: [
-      'Good luck beating this.',
-      'Try to do better, I dare you.',
-      'I\'ll wait.',
-      'Don\'t even bother.',
-      'Set the bar. Your problem now.',
-      'It\'s giving unbeatable.',
-      'Rent free in the leaderboard.',
-      'Stay mad.'
-    ]
+    base: 'https://carreritas.vercel.app/'
+  },
+
+  menu: {
+    previewFps: MENU_PREVIEW_FPS,
+    previewFrameIntervalMs: 1000 / MENU_PREVIEW_FPS,
   },
 
   countries: []
 };
+
+// Set default pattern after patterns array is created
+Constants.car.defaultSettings.pattern = Constants.car.patterns[0];
+
+export default Constants;

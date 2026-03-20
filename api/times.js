@@ -1,32 +1,32 @@
-var { getDb } = require('./_db');
-var { verifyToken, sendJson } = require('./_auth');
+const { getDb } = require('./_db');
+const { verifyToken, sendJson } = require('./_auth');
 
 module.exports = async function (req, res) {
-  var user = verifyToken(req);
+  const user = verifyToken(req);
   if (!user) return sendJson(res, 401, { error: 'Unauthorized' });
 
-  var sql = getDb();
+  const sql = getDb();
 
   if (req.method === 'GET') {
-    var q = req.query || {};
+    const q = req.query || {};
     if (q.track_code && q.laps) {
-      var rows = await sql(
+      const rowsOne = await sql(
         'SELECT track_code, laps, reversed, night_mode, time_ms, ghost_data, recorded_at FROM best_times WHERE user_id = $1 AND track_code = $2 AND laps = $3 AND reversed = $4 AND night_mode = $5 ORDER BY time_ms LIMIT 1',
         [user.id, q.track_code, parseInt(q.laps), q.reversed === 'true', q.night_mode === 'true']
       );
-      sendJson(res, 200, { times: rows });
+      sendJson(res, 200, { times: rowsOne });
     } else {
-      var rows = await sql(
+      const rowsAll = await sql(
         'SELECT track_code, laps, reversed, night_mode, time_ms, recorded_at FROM best_times WHERE user_id = $1 ORDER BY time_ms',
         [user.id]
       );
-      sendJson(res, 200, { times: rows });
+      sendJson(res, 200, { times: rowsAll });
     }
   } else if (req.method === 'POST') {
-    var b = req.body || {};
+    const b = req.body || {};
     if (!b.track_code || !b.time_ms || !b.laps) return sendJson(res, 400, { error: 'Missing fields' });
 
-    var existing = await sql(
+    const existing = await sql(
       'SELECT time_ms FROM best_times WHERE user_id = $1 AND track_code = $2 AND laps = $3 AND reversed = $4 AND night_mode = $5',
       [user.id, b.track_code, b.laps, !!b.reversed, !!b.night_mode]
     );
