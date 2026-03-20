@@ -38,8 +38,8 @@ export const strings = {
         'A / \u2190 Steer Left \u00a0\u00a0 D / \u2194 Steer Right',
         'SPACE Restart \u00a0\u00a0 C Camera'
       ],
-      tabEvent: 'EVENT',
-      tabChallenges: 'CHALLENGES',
+      tabCasual: 'CASUAL',
+      tabLeaderboard: 'LEADERBOARD',
       race: 'RACE',
       raceTypeSingle: 'SINGLE',
       raceTypeSeries: 'SERIES',
@@ -63,7 +63,7 @@ export const strings = {
         'weekly-race': 'WEEKLY RACE',
         'weekly-series': 'WEEKLY SERIES'
       },
-      leaderboardBtn: 'LEADERBOARD',
+      top10MenuBtn: 'TOP 10',
       github: 'GitHub'
     },
     results: {
@@ -279,10 +279,6 @@ export const strings = {
     retry: 'RETRY'
   },
 
-  leaderboard: {
-    empty: 'No times yet'
-  },
-
   settings: {
     showcase: 'SHOWCASE'
   },
@@ -371,8 +367,8 @@ export function applyStaticDocumentCopy() {
   }
 
   const tabBtns = document.querySelectorAll('#menu-tab-toggle .seg-option');
-  if (tabBtns[0]) tabBtns[0].textContent = d.overlay.tabEvent;
-  if (tabBtns[1]) tabBtns[1].textContent = d.overlay.tabChallenges;
+  if (tabBtns[0]) tabBtns[0].textContent = d.overlay.tabCasual;
+  if (tabBtns[1]) tabBtns[1].textContent = d.overlay.tabLeaderboard;
 
   const raceBtns = document.querySelectorAll('#race-type-toggle .seg-option');
   if (raceBtns[0]) raceBtns[0].textContent = d.overlay.raceTypeSingle;
@@ -415,7 +411,7 @@ export function applyStaticDocumentCopy() {
     chBtns[i].textContent = cm[order[i]];
   }
 
-  _setText('leaderboard-menu-btn', d.overlay.leaderboardBtn);
+  _setText('leaderboard-menu-btn', d.overlay.top10MenuBtn);
 
   const gh = document.querySelector('#overlay .github-link');
   if (gh) gh.textContent = d.overlay.github;

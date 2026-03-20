@@ -1,4 +1,5 @@
 import Constants from './constants.js';
+import { fakeChallengeLeaderboardData } from './fake-leaderboard.js';
 import Storage, { normalizeCarPatternInSettings } from './storage.js';
 import { GuestSession, UserSession } from './session.js';
 import {
@@ -174,7 +175,7 @@ export default class Game {
   // --- Leaderboard ---
 
   showLeaderboardForChallenge(modeOrStr) {
-    this.leaderboard.clear();
+    this.leaderboard.showLoadingPlaceholder();
 
     const cm = typeof modeOrStr === 'string' ? ChallengeMode.fromString(modeOrStr) : modeOrStr;
     const label = challengeLabel(cm);
@@ -183,17 +184,21 @@ export default class Game {
     this.leaderboard.setTrackText(label);
 
     void (async () => {
-      if (cm.isSeries()) {
-        this.renderLeaderboardData(await this.apiClient.fetchChallengeLeaderboard(key));
+      let data;
+      if (Constants.fakeChallengeLeaderboards) {
+        data = await fakeChallengeLeaderboardData(cm.slug(), this.userProfile.getUsername(), this.userProfile.getCountry());
+      } else if (cm.isSeries()) {
+        data = await this.apiClient.fetchChallengeLeaderboard(key);
       } else {
         const config = cm.isDailyRace() ? dailyConfig() : weeklyRaceConfig();
-        this.renderLeaderboardData(await this.apiClient.fetchLeaderboard(config.code, config.laps, config.direction, config.mode));
+        data = await this.apiClient.fetchLeaderboard(config.code, config.laps, config.direction, config.mode);
       }
+      this.renderLeaderboardData(data);
     })();
   }
 
   showLeaderboardForCurrentTrack() {
-    this.leaderboard.clear();
+    this.leaderboard.showLoadingPlaceholder();
     const desc = formatDescriptor(this.currentTrackCode, this.direction, this.mode, this.totalLaps);
     this.leaderboard.setTrackText(desc);
     void (async () => {
@@ -203,8 +208,6 @@ export default class Game {
   }
 
   showLeaderboardPanel() {
-    this.leaderboard.clear();
-
     this.runContext.openLeaderboardPanel(this);
 
     this.leaderboard.show();
@@ -444,14 +447,19 @@ export default class Game {
     const isSeries = cm.isSeries();
 
     void (async () => {
-      const data = isSeries
-        ? await this.apiClient.fetchChallengeLeaderboard(this.runContext.getChallengeKey(utcDateStr(), utcMondayStr()))
-        : await this.apiClient.fetchLeaderboard(
-            info.config.code,
-            info.config.laps,
-            info.config.direction,
-            info.config.mode
-          );
+      let data;
+      if (Constants.fakeChallengeLeaderboards) {
+        data = await fakeChallengeLeaderboardData(cm.slug(), this.userProfile.getUsername(), this.userProfile.getCountry());
+      } else if (isSeries) {
+        data = await this.apiClient.fetchChallengeLeaderboard(this.runContext.getChallengeKey(utcDateStr(), utcMondayStr()));
+      } else {
+        data = await this.apiClient.fetchLeaderboard(
+          info.config.code,
+          info.config.laps,
+          info.config.direction,
+          info.config.mode
+        );
+      }
       const total = data.total_count || 0;
       let userRank = null;
       if (this.authManager.isLoggedIn() && data.entries) {

@@ -66,6 +66,19 @@ const Constants = {
     previewFrameIntervalMs: 1000 / MENU_PREVIEW_FPS,
   },
 
+  /**
+   * When true, challenge leaderboard API responses are replaced with mock data
+   * (`fake-leaderboard.js`). Default: on in Vite dev, off in production. Override with
+   * `VITE_FAKE_CHALLENGE_LEADERBOARD=true` / `=false`.
+   */
+  fakeChallengeLeaderboards: (() => {
+    if (typeof import.meta === 'undefined') return false;
+    const v = import.meta.env.VITE_FAKE_CHALLENGE_LEADERBOARD;
+    if (v === 'false') return false;
+    if (v === 'true') return true;
+    return import.meta.env.DEV === true;
+  })(),
+
   countries: []
 };
 

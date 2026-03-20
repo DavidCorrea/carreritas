@@ -734,13 +734,55 @@ body.mobile #speed-display {
   letter-spacing: 0.5rem;
   font-family: "SF Mono", Monaco, "Cascadia Mono", "Courier New", monospace;
 }
+#leaderboard-list {
+  min-height: 2.5rem;
+}
+.lb-country-empty {
+  min-width: 1.75rem;
+  display: inline-block;
+}
+/* Ranks 4–10: dashed placeholder only. Ranks 1–3 use podium styling via .lb-pos-* */
+.lb-empty-slot:not(.lb-pos-1):not(.lb-pos-2):not(.lb-pos-3) {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+.lb-empty-slot:not(.lb-pos-1):not(.lb-pos-2):not(.lb-pos-3) .lb-rank {
+  color: rgba(255, 255, 255, 0.12);
+}
+.lb-empty-slot:not(.lb-pos-1):not(.lb-pos-2):not(.lb-pos-3) .lb-name,
+.lb-empty-slot:not(.lb-pos-1):not(.lb-pos-2):not(.lb-pos-3) .lb-time {
+  color: rgba(255, 255, 255, 0.12);
+  font-weight: 400;
+}
+.lb-cell-fade {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.lb-entry .lb-cell-fade {
+  transition-delay: var(--lb-stagger, 0ms);
+}
+.lb-cell-fade.lb-cell-fade-in {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lb-cell-fade {
+    transition: none;
+    opacity: 1;
+  }
+  .lb-entry .lb-cell-fade {
+    transition-delay: 0ms !important;
+  }
+}
 .lb-entry {
+  box-sizing: border-box;
   display: flex; align-items: center; gap: 1rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.3125rem;
   padding: 0.625rem 1.25rem; margin-bottom: 0.25rem;
   min-width: 23.75rem;
+  min-height: 2.875rem;
   font-family: "SF Mono", Monaco, "Courier New", monospace;
 }
 .lb-rank {
@@ -749,21 +791,48 @@ body.mobile #speed-display {
   min-width: 1.75rem; text-align: right;
 }
 .lb-entry.lb-pos-1 {
-  border-color: rgba(78, 205, 196, 0.3);
-  background: linear-gradient(90deg, rgba(78, 205, 196, 0.15), rgba(78, 205, 196, 0.05), rgba(78, 205, 196, 0.15));
+  border-color: rgba(78, 205, 196, 0.55);
+  background: linear-gradient(90deg, rgba(78, 205, 196, 0.26), rgba(78, 205, 196, 0.09), rgba(78, 205, 196, 0.26));
   background-size: 200% 100%;
   animation: lb-shimmer 4s ease-in-out infinite;
+  box-shadow:
+    0 0 0 1px rgba(78, 205, 196, 0.2),
+    0 0 1.5rem rgba(78, 205, 196, 0.22);
 }
 @keyframes lb-shimmer {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-.lb-entry.lb-pos-1 .lb-rank { color: #4ecdc4; }
+.lb-entry.lb-pos-1 .lb-rank {
+  color: #9cf0e8;
+  font-size: 0.9375rem;
+  text-shadow: 0 0 0.625rem rgba(78, 205, 196, 0.55);
+}
 .lb-entry.lb-pos-1 .lb-name { color: #fff; }
+.lb-entry.lb-pos-1 .lb-time {
+  color: #7ee8df;
+  text-shadow: 0 0 0.5rem rgba(78, 205, 196, 0.35);
+}
 .lb-entry.lb-pos-2 { background: rgba(78, 205, 196, 0.07); border-color: rgba(78, 205, 196, 0.15); }
 .lb-entry.lb-pos-2 .lb-rank { color: rgba(78, 205, 196, 0.7); }
 .lb-entry.lb-pos-3 { background: rgba(78, 205, 196, 0.04); border-color: rgba(78, 205, 196, 0.10); }
 .lb-entry.lb-pos-3 .lb-rank { color: rgba(78, 205, 196, 0.5); }
+.lb-entry.lb-empty-slot.lb-pos-1 .lb-name,
+.lb-entry.lb-empty-slot.lb-pos-1 .lb-time {
+  color: rgba(255, 255, 255, 0.28);
+  font-weight: 400;
+  text-shadow: none;
+}
+.lb-entry.lb-empty-slot.lb-pos-2 .lb-name,
+.lb-entry.lb-empty-slot.lb-pos-2 .lb-time {
+  color: rgba(255, 255, 255, 0.24);
+  font-weight: 400;
+}
+.lb-entry.lb-empty-slot.lb-pos-3 .lb-name,
+.lb-entry.lb-empty-slot.lb-pos-3 .lb-time {
+  color: rgba(255, 255, 255, 0.22);
+  font-weight: 400;
+}
 .lb-country {
   font-size: 1.25rem;
   min-width: 1.75rem; text-align: center;
@@ -780,11 +849,6 @@ body.mobile #speed-display {
 .lb-separator {
   border-top: 1px dashed rgba(255, 255, 255, 0.12);
   margin: 0.5rem 0;
-}
-.lb-empty {
-  color: rgba(255, 255, 255, 0.25);
-  font-family: "SF Mono", Monaco, "Courier New", monospace;
-  font-size: 0.875rem; margin-top: 1rem; text-align: center;
 }
 
 #touch-controls {
