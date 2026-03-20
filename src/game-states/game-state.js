@@ -159,7 +159,13 @@ export class FinishedState extends GameState {
   onEnter(_context) {
     // Results screen setup is handled by showResultsScreen() before transition
   }
+  onUpdate(dt, context) {
+    if (context.postRaceReplayActive) {
+      context.updatePostRaceReplay(dt);
+    }
+  }
   handleEnterKey(context) {
+    if (context.postRaceReplayActive) return;
     if (context.seriesMode && !context.currentRun.isFinalStage(context.stageCount)) {
       context.advanceToNextStage();
     } else {
@@ -167,9 +173,14 @@ export class FinishedState extends GameState {
     }
   }
   handleEscapeKey(context) {
+    if (context.postRaceReplayActive) {
+      context.exitPostRaceReplay();
+      return;
+    }
     context.restartRace();
   }
   handleSpaceKey(context) {
+    if (context.postRaceReplayActive) return;
     this.handleEnterKey(context);
   }
 }

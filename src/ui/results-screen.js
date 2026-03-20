@@ -6,10 +6,12 @@ export default class ResultsScreen {
     this._resultsList = document.getElementById('results-list');
     this._resultsTrackText = document.getElementById('results-track-text');
     this._copyTrackBtn = document.getElementById('copy-track-btn');
+    this._replayBtn = document.getElementById('replay-btn');
     this._shareBtn = document.getElementById('share-btn');
     this._leaderboardBtn = document.getElementById('leaderboard-btn');
     this._promptEl = this._resultsEl.querySelector('.start-prompt');
     this._resultsH2 = this._resultsEl.querySelector('h2');
+    this._replayHintEl = document.getElementById('replay-hint');
   }
 
   show() { this._resultsEl.style.display = 'flex'; }
@@ -55,7 +57,25 @@ export default class ResultsScreen {
   }
 
   onCopy(handler) { this._copyTrackBtn.addEventListener('click', handler); }
+  onReplay(handler) { this._replayBtn.addEventListener('click', handler); }
   onShare(handler) { this._shareBtn.addEventListener('click', handler); }
   onLeaderboardClick(handler) { this._leaderboardBtn.addEventListener('click', handler); }
   onPromptClick(handler) { this._promptEl.addEventListener('click', handler); }
+
+  /** @param {string} text */
+  showReplayHint(text) {
+    if (!this._replayHintEl) return;
+    this._replayHintEl.textContent = text;
+    this._replayHintEl.classList.remove('hidden');
+  }
+
+  hideReplayHint() {
+    if (!this._replayHintEl) return;
+    this._replayHintEl.classList.add('hidden');
+  }
+
+  onReplayHintDismiss(handler) {
+    if (!this._replayHintEl) return;
+    this._replayHintEl.addEventListener('click', handler);
+  }
 }

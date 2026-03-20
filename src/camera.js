@@ -84,15 +84,43 @@ export default class Camera {
   }
 
   showcaseShotPosition(shot, elapsed, angleOffset, player) {
-    const r = shot.radiusStart != null
-      ? shot.radiusStart + (shot.radiusEnd - shot.radiusStart) * (elapsed / shot.duration)
+    const c = Constants.camera.showcase;
+    const orbitScale = c.orbitDistanceScale ?? 1;
+    const hScale = c.showcaseHeightScale ?? 1;
+    const aerialBoost = shot.aerial ? (c.aerialHeightBoost ?? 1) : 1;
+    const dur = shot.duration > 0 ? shot.duration : 1;
+    const u = Math.min(1, Math.max(0, elapsed / dur));
+
+    const r0 = shot.radiusStart != null
+      ? shot.radiusStart + (shot.radiusEnd - shot.radiusStart) * u
       : shot.radius;
+    const r = r0 * orbitScale;
     const ang = angleOffset + elapsed * shot.speed;
+    const rz = shot.radiusZScale != null ? shot.radiusZScale : 1;
+
+    let hBase;
+    if (shot.heightStart != null && shot.heightEnd != null) {
+      hBase = shot.heightStart + (shot.heightEnd - shot.heightStart) * u;
+    } else {
+      hBase = shot.height ?? 12;
+    }
+    if (shot.heightSwayAmp) {
+      hBase += shot.heightSwayAmp * Math.sin(elapsed * (shot.heightSwaySpeed ?? 1.12));
+    }
+
+    let lookY = shot.lookY;
+    if (shot.lookYStart != null && shot.lookYEnd != null) {
+      lookY = shot.lookYStart + (shot.lookYEnd - shot.lookYStart) * u;
+    }
+    if (lookY == null) lookY = 2;
+
+    const y = hBase * hScale * aerialBoost;
+
     return {
       x: player.x + Math.sin(ang) * r,
-      y: shot.height,
-      z: player.z + Math.cos(ang) * r,
-      lookY: shot.lookY
+      y,
+      z: player.z + Math.cos(ang) * r * rz,
+      lookY
     };
   }
 
@@ -101,15 +129,32 @@ export default class Camera {
     return includeRunningOnly ? c.shotsRunning : c.shotsIdle;
   }
 
-  /** World-fixed camera beside the track at shot start; car moves past while the rig stays put. */
+  /**
+   * World-fixed rig at shot start. Lateral = beside the track; forward = down the road ahead of the car
+   * so it keeps looking at the player and the car reads as approaching from far (long lens).
+   */
   _initFixedShowcaseShot(player, shot) {
-    const lateral = shot.lateral ?? 95;
-    const side = shot.side ?? 1;
-    const px = player.x + side * lateral * Math.cos(player.angle);
-    const pz = player.z - side * lateral * Math.sin(player.angle);
+    const rigScale = Constants.camera.showcase.fixedLateralScale ?? 1;
+    const hScale = Constants.camera.showcase.showcaseHeightScale ?? 1;
+    const fx = Math.sin(player.angle);
+    const fz = Math.cos(player.angle);
+
+    let px;
+    let pz;
+    if (shot.forward != null) {
+      const ahead = shot.forward * rigScale;
+      px = player.x + fx * ahead;
+      pz = player.z + fz * ahead;
+    } else {
+      const lateral = (shot.lateral ?? 95) * rigScale;
+      const side = shot.side ?? 1;
+      px = player.x + side * lateral * Math.cos(player.angle);
+      pz = player.z - side * lateral * Math.sin(player.angle);
+    }
+
     this._fixedShowcasePos = {
       x: px,
-      y: shot.height,
+      y: shot.height * hScale,
       z: pz,
       lookY: shot.lookY ?? 2
     };

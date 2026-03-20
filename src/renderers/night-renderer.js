@@ -158,15 +158,19 @@ function headlightParams(headlightShape) {
   return { length, halfAngle };
 }
 
-/** Writes FP spotlight cone params into `out` (no per-frame allocation). Same mapping as chase beam meshes. */
+/** Writes FP spotlight cone params into `out` (no per-frame allocation). Beam length still follows `headlightParams`; FP aim is independent so the pool stays on the road ahead. */
 function fpSpotParamsFromHeadlightShapeInto(headlightShape, out) {
   const hp = headlightParams(headlightShape);
   const t = (headlightShape != null ? headlightShape : 50) / 100;
   out.angle = Math.min(Math.PI / 2 - 0.02, 2 * hp.halfAngle);
-  out.distance = 95 + hp.length * 0.72;
   out.penumbra = 0.06 + (hp.halfAngle - 0.2) * 0.35;
   out.intensity = 3.4 + t * 1.4;
-  out.aimDist = 55 + hp.length * 0.38;
+  // Target a few dozen metres ahead (not tied to chase beam length, which hits 80–180m and read as “aiming at the horizon”).
+  // Wider cone (low t) = slightly closer hotspot; narrow (high t) = a bit farther but still capped.
+  out.aimDist = 28 + t * 22;
+  const fwd = Math.max(0, out.aimDist - FP_BUMPER_OFFSET);
+  const rayLen = Math.hypot(fwd, 2.05 - 0.06);
+  out.distance = Math.min(160, 32 + rayLen * 1.35);
 }
 
 export default class NightRenderer extends Renderer {

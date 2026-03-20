@@ -72,6 +72,10 @@ export const strings = {
       shareTitle: 'Share results',
       shareBtn: 'SHARE',
       leaderboardBtn: 'LEADERBOARD',
+      replayBtn: 'REPLAY',
+      replayBtnTitle: 'Watch replay',
+      replayHintDesktop: 'Press ESC to return',
+      replayHintMobile: 'Tap to return',
       /** Desktop keyboard hint after race (also used for series complete). */
       promptRetryMenu: 'ENTER Retry \u00b7 ESC Menu'
     },
@@ -423,6 +427,8 @@ export function applyStaticDocumentCopy() {
   _setAttr('share-btn', 'title', d.results.shareTitle);
   _setText('share-btn', d.results.shareBtn);
   _setText('leaderboard-btn', d.results.leaderboardBtn);
+  _setAttr('replay-btn', 'title', d.results.replayBtnTitle);
+  _setText('replay-btn', d.results.replayBtn);
   _setText('results-prompt', d.results.promptRetryMenu);
 
   const lbH2 = document.querySelector('#leaderboard h2');

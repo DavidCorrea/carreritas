@@ -142,11 +142,14 @@
     <p id="results-track-code"><span id="results-track-text"></span><button id="copy-track-btn" type="button" title="Copy track code">&#9112;</button></p>
     <ul id="results-list"></ul>
     <div style="display:flex; gap:0.625rem; margin-top:1rem;">
+      <button id="replay-btn" type="button" title="Watch replay" style="margin-top:0;">REPLAY</button>
       <button id="share-btn" type="button" title="Share results" style="margin-top:0;">SHARE</button>
       <button id="leaderboard-btn" type="button" style="font-size:0.8125rem; padding:0.375rem 1.125rem; background:rgba(78,205,196,0.10); border:1px solid rgba(78,205,196,0.3); color:rgba(78,205,196,0.7); border-radius:0.3125rem; cursor:pointer; font-family:'SF Mono',Monaco,'Courier New',monospace; letter-spacing:0.125rem; transition:all 0.15s;">LEADERBOARD</button>
     </div>
     <p class="start-prompt" id="results-prompt">ENTER Retry &middot; ESC Menu</p>
   </div>
+
+  <p id="replay-hint" class="replay-hint hidden" aria-live="polite"></p>
 
   <div id="leaderboard">
     <h2>LEADERBOARD</h2>

@@ -437,6 +437,7 @@ export default class Game {
   }
 
   advanceToNextStage() {
+    if (this.postRaceReplayActive) this._cancelPostRaceReplayOnly();
     this.currentRun.incrementStageIndex();
     this.results.hide();
     this.startCountdown();
@@ -557,7 +558,87 @@ export default class Game {
     this.stateMachine.transitionTo(new FinishedState(), this);
   }
 
+  startPostRaceReplay() {
+    if (!this.stateMachine.current.isFinished() || !this.player) return;
+    const rec = this.currentRun.getRecording();
+    if (rec.length < 2) return;
+    this.postRaceReplayActive = true;
+    this.postRaceReplayTime = 0;
+    this.results.hide();
+    const hint = this.mobile
+      ? strings.document.results.replayHintMobile
+      : strings.document.results.replayHintDesktop;
+    this.results.showReplayHint(hint);
+    this.hud.hide();
+    this.ghost.setVisibleWhenPresent(false);
+    this.cam.startShowcase();
+    this._applyReplayPoseAtTime(0);
+    this.sceneDirty = true;
+  }
+
+  exitPostRaceReplay() {
+    if (!this.postRaceReplayActive) return;
+    this._cancelPostRaceReplayOnly();
+    this.results.show();
+  }
+
+  _cancelPostRaceReplayOnly() {
+    if (!this.postRaceReplayActive) return;
+    this.postRaceReplayActive = false;
+    this.postRaceReplayTime = 0;
+    this.results.hideReplayHint();
+    this.hud.show();
+    this.ghost.setVisibleWhenPresent(true);
+    const rec = this.currentRun.getRecording();
+    if (rec.length && this.player) {
+      const last = rec[rec.length - 1];
+      this.player.setWorldPose(last.x, last.z, last.a);
+    }
+    this.cam.stopShowcase();
+    if (this.player) {
+      this.cam.applyMode(this.player);
+    }
+    this.sceneDirty = true;
+  }
+
+  updatePostRaceReplay(dt) {
+    if (!this.player || !this.postRaceReplayActive) return;
+    const finishTime = this.player.finishTime;
+    if (finishTime <= 0) return;
+    this.postRaceReplayTime += dt;
+    if (this.postRaceReplayTime >= finishTime) {
+      this.postRaceReplayTime = 0;
+      this.cam.startShowcase();
+    }
+    this._applyReplayPoseAtTime(this.postRaceReplayTime);
+    this.sceneDirty = true;
+  }
+
+  _applyReplayPoseAtTime(t) {
+    const rec = this.currentRun.getRecording();
+    if (!this.player || rec.length === 0) return;
+    const interval = Constants.track.recordInterval;
+    const frameTime = t / interval;
+    const i = Math.floor(frameTime);
+    if (i >= rec.length - 1) {
+      const last = rec[rec.length - 1];
+      this.player.setWorldPose(last.x, last.z, last.a);
+      return;
+    }
+    const frac = frameTime - i;
+    const fa = rec[i];
+    const fb = rec[i + 1];
+    const x = fa.x + (fb.x - fa.x) * frac;
+    const z = fa.z + (fb.z - fa.z) * frac;
+    let angleDiff = fb.a - fa.a;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    const a = fa.a + angleDiff * frac;
+    this.player.setWorldPose(x, z, a);
+  }
+
   restartCurrentMap() {
+    if (this.postRaceReplayActive) this._cancelPostRaceReplayOnly();
     this.results.hide();
     if (this.player) { disposeGroup(this.player.mesh); this.scene.remove(this.player.mesh); this.player = null; }
     this.createPlayer();
@@ -567,6 +648,7 @@ export default class Game {
   }
 
   restartRace() {
+    if (this.postRaceReplayActive) this._cancelPostRaceReplayOnly();
     this.results.hide();
     this.currentRun.resetSeriesProgress();
     if (this.seriesMode) {
@@ -749,6 +831,8 @@ export default class Game {
     this.previewT = 0;
     this.menuPreviewActive = false;
     this.menuPreviewLastRender = 0;
+    this.postRaceReplayActive = false;
+    this.postRaceReplayTime = 0;
 
     this.seriesMode = false;
     /** Which series stage the menu 3D preview reflects (0-based). */
@@ -1037,6 +1121,10 @@ export default class Game {
         }
       },
       onTouchRestart: () => {
+        if (this.postRaceReplayActive) {
+          this.exitPostRaceReplay();
+          return;
+        }
         if (this.stateMachine.current.isRacing() || this.stateMachine.current.isCountdown()) {
           this.restartCurrentMap();
         } else if (this.stateMachine.current.isFinished()) {
@@ -1049,6 +1137,10 @@ export default class Game {
         this._cycleCameraMode();
       },
       onTouchMenu: () => {
+        if (this.postRaceReplayActive) {
+          this.exitPostRaceReplay();
+          return;
+        }
         if (this.stateMachine.current.isFinished()) {
           if (this.stateMachine.current.handleEscapeKey) {
             this.stateMachine.current.handleEscapeKey(this);
@@ -1245,6 +1337,13 @@ export default class Game {
       this.showAuthPanel();
     });
 
+    this.results.onReplay(() => {
+      if (this.stateMachine.current.isFinished()) this.startPostRaceReplay();
+    });
+    this.results.onReplayHintDismiss(() => {
+      if (this.postRaceReplayActive) this.exitPostRaceReplay();
+    });
+
     this.results.onLeaderboardClick(() => {
       this.leaderboardFrom = 'results';
       this.results.hide();
@@ -1350,6 +1449,7 @@ export default class Game {
   }
 
   _cycleCameraMode() {
+    if (this.postRaceReplayActive) return;
     this.hud.setCameraLabel(this._displayCameraName(this.cam.cycleMode(this.player)));
     this.sceneDirty = true;
   }
@@ -1393,7 +1493,8 @@ export default class Game {
     }
 
     if (this.cam.isShowcaseActive()) {
-      this.cam.updateShowcase(dt, this.player, false);
+      const runningShots = this.previewRunning || this.postRaceReplayActive;
+      this.cam.updateShowcase(dt, this.player, runningShots);
       this.sceneDirty = true;
       return;
     }
