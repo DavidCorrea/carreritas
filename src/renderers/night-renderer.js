@@ -303,13 +303,16 @@ export default class NightRenderer extends Renderer {
     }
   }
 
-  rebuildMeshes(carSettings) {
+  /**
+   * Headlight cone geometry (beams + glow); underglow is independent of SHAPE.
+   * Used when SHAPE drifts in chase/non-FP while dragging — avoids underglow teardown/recreate flicker.
+   */
+  _rebuildHeadlightBeamMeshes(carSettings) {
     disposeMesh(this.beamMeshL);
     disposeMesh(this.beamMeshR);
     disposeMesh(this.glowMesh);
     disposeMesh(this.tailMesh);
-    disposeGroup(this.underglowMesh);
-    this.scene.remove(this.beamMeshL, this.beamMeshR, this.glowMesh, this.tailMesh, this.underglowMesh, this.underglowLight);
+    this.scene.remove(this.beamMeshL, this.beamMeshR, this.glowMesh, this.tailMesh);
 
     const hlRgb = hexToRgb(carSettings.headlightsColor);
     const hp = headlightParams(carSettings.headlightShape);
@@ -319,17 +322,26 @@ export default class NightRenderer extends Renderer {
     this.glowMesh = createGlowMesh(35, hlRgb.r * 0.4, hlRgb.g * 0.3, hlRgb.b * 0.1);
     this.tailMesh = createGlowMesh(15, 0.15, 0.02, 0);
 
-    this.underglowMesh = createUnderglowMesh(carSettings.underglowColor, carSettings.underglowOpacity);
-    this.underglowLight = new THREE.PointLight(hexToInt(carSettings.underglowColor), 0, 60, 2);
-
-    this.scene.add(this.beamMeshL, this.beamMeshR, this.glowMesh, this.tailMesh, this.underglowMesh, this.underglowLight);
+    this.scene.add(this.beamMeshL, this.beamMeshR, this.glowMesh, this.tailMesh);
     this.beamMeshL.visible = false;
     this.beamMeshR.visible = false;
     this.glowMesh.visible = false;
     this.tailMesh.visible = false;
-    this.underglowMesh.visible = false;
     this._fpHeadlightShapeCached = null;
     this._beamShapeAtRebuild = carSettings.headlightShape;
+  }
+
+  rebuildMeshes(carSettings) {
+    this._rebuildHeadlightBeamMeshes(carSettings);
+
+    disposeGroup(this.underglowMesh);
+    this.scene.remove(this.underglowMesh, this.underglowLight);
+
+    this.underglowMesh = createUnderglowMesh(carSettings.underglowColor, carSettings.underglowOpacity);
+    this.underglowLight = new THREE.PointLight(hexToInt(carSettings.underglowColor), 0, 60, 2);
+
+    this.scene.add(this.underglowMesh, this.underglowLight);
+    this.underglowMesh.visible = false;
   }
 
   update(player, underglowOpacity, cameraModeIndex) {
@@ -355,7 +367,7 @@ export default class NightRenderer extends Renderer {
     }
 
     if (!isFirstPerson && this.carSettings.headlightShape !== this._beamShapeAtRebuild) {
-      this.rebuildMeshes(this.carSettings);
+      this._rebuildHeadlightBeamMeshes(this.carSettings);
     }
 
     this.beamMeshL.visible = showBeamMeshes;

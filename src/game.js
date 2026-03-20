@@ -40,6 +40,9 @@ import { strings } from './strings.js';
 const _previewPt = new THREE.Vector3();
 const _previewTan = new THREE.Vector3();
 
+/** Slider drags were calling saveSettings every tick (JSON clone + storage + optional API). */
+const SAVE_SETTINGS_DEBOUNCE_MS = 350;
+
 /**
  * Fullscreen modals: blur the WebGL layer (backdrop-filter does not sample canvas reliably).
  * Car settings (#settings) is excluded: the menu is hidden while it is open and the scene must stay sharp.
@@ -79,6 +82,7 @@ export default class Game {
     this.stateMachine = new StateMachine(new MenuState());
     this._wireUiCallbacks();
     this._bindResize();
+    this._bindPersistGuards();
     requestAnimationFrame((t) => this.gameLoop(t));
   }
 
@@ -122,12 +126,47 @@ export default class Game {
   }
 
   saveSettings() {
-    // Serialize pattern object to name string for storage
+    if (this._saveSettingsTimer) {
+      clearTimeout(this._saveSettingsTimer);
+      this._saveSettingsTimer = null;
+    }
+    this._persistSettings();
+  }
+
+  /** Debounced persist for high-frequency sliders (SHAPE, underglow %). */
+  scheduleSaveSettings() {
+    if (this._saveSettingsTimer) {
+      clearTimeout(this._saveSettingsTimer);
+    }
+    const self = this;
+    this._saveSettingsTimer = setTimeout(function () {
+      self._saveSettingsTimer = null;
+      self._persistSettings();
+    }, SAVE_SETTINGS_DEBOUNCE_MS);
+  }
+
+  _persistSettings() {
     const settingsToSave = JSON.parse(JSON.stringify(this.carSettings));
     if (settingsToSave.pattern && typeof settingsToSave.pattern === 'object') {
       settingsToSave.pattern = settingsToSave.pattern.name;
     }
     this.session.saveSettings(settingsToSave);
+  }
+
+  /** At most one NightRenderer.updateColors per frame while scrubbing underglow opacity. */
+  _scheduleUnderglowColorPreviewUpdate() {
+    if (this._underglowColorRaf) return;
+    this._underglowColorRaf = requestAnimationFrame(() => {
+      this._underglowColorRaf = null;
+      if (this.sceneRenderer) this.sceneRenderer.updateColors(this.carSettings);
+    });
+  }
+
+  _flushUnderglowColorPreview() {
+    if (!this._underglowColorRaf) return;
+    cancelAnimationFrame(this._underglowColorRaf);
+    this._underglowColorRaf = null;
+    if (this.sceneRenderer) this.sceneRenderer.updateColors(this.carSettings);
   }
 
   loadAuth() {
@@ -675,6 +714,8 @@ export default class Game {
   }
 
   hideSettings() {
+    this.saveSettings();
+    this._flushUnderglowColorPreview();
     if (this.stateMachine.current.isMenu() && !this.records.isOpen() && !this.leaderboard.isOpen()) {
       this.menuPreviewActive = false;
     }
@@ -730,6 +771,8 @@ export default class Game {
     this.leaderboardFrom = null;
     this.lastTime = 0;
     this.rebuildTimer = undefined;
+    this._saveSettingsTimer = null;
+    this._underglowColorRaf = null;
     this.currentTrackCode = '';
 
     this.sceneDirty = true;
@@ -928,6 +971,14 @@ export default class Game {
       this.cam.handleResize(this.player);
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.sceneDirty = true;
+    });
+  }
+
+  _bindPersistGuards() {
+    const self = this;
+    window.addEventListener('pagehide', function () {
+      self.saveSettings();
+      self._flushUnderglowColorPreview();
     });
   }
 
@@ -1240,7 +1291,7 @@ export default class Game {
 
     this.settingsPanel.onHeadlightShapeInput((value) => {
       this.carSettings.headlightShape = value;
-      this.saveSettings();
+      this.scheduleSaveSettings();
       this.switchPreviewToNight();
       this.sceneDirty = true;
     });
@@ -1261,8 +1312,8 @@ export default class Game {
 
     this.settingsPanel.onUnderglowOpacityChange((value) => {
       this.carSettings.underglowOpacity = value;
-      this.saveSettings();
-      if (this.sceneRenderer) this.sceneRenderer.updateColors(this.carSettings);
+      this.scheduleSaveSettings();
+      this._scheduleUnderglowColorPreviewUpdate();
       this.sceneDirty = true;
     });
 
