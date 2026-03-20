@@ -825,7 +825,8 @@ export default class Game {
     orthoCamera.position.set(0, Constants.camera.height, 0);
     orthoCamera.up.set(0, 0, -1);
     orthoCamera.lookAt(0, 0, 0);
-    const perspCamera = new THREE.PerspectiveCamera(70, aspect, 1, 2000);
+    // Low near plane: hood/first-person geometry sits close to the camera; near=1 clipped it.
+    const perspCamera = new THREE.PerspectiveCamera(70, aspect, 0.05, 2000);
     this.cam = new Camera(orthoCamera, perspCamera);
     this.hud.setCameraLabel(this._displayCameraName(this.cam.getCurrentModeName()));
 
@@ -1343,6 +1344,7 @@ export default class Game {
 
   _tickSceneRenderer() {
     if (!this.sceneRenderer) return;
+    if (!this.mode.isNight()) return;
     this.sceneRenderer.update(this.player, this.carSettings.underglowOpacity, this.cam.getModeIndex());
   }
 

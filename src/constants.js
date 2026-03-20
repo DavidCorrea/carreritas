@@ -1,5 +1,5 @@
 import { CAR_RADIUS, CAMERA_HEIGHT } from './intrinsic-constants.js';
-import { TopDownMode, RotatedMode, ChaseMode, IsometricMode } from './camera-modes/index.js';
+import { TopDownMode, RotatedMode, ChaseMode, FirstPersonMode, IsometricMode } from './camera-modes/index.js';
 import { SolidPattern, RingPattern, HalfPattern, StripePattern, GradientPattern, RadialPattern, SpiralPattern, DotsPattern, BullseyePattern } from './car-patterns/index.js';
 
 const MENU_PREVIEW_FPS = 60;
@@ -38,7 +38,7 @@ const Constants = {
   camera: {
     viewSize: 450,
     height: CAMERA_HEIGHT,
-    modes: [new TopDownMode(), new RotatedMode(), new ChaseMode(), new IsometricMode()],
+    modes: [new TopDownMode(), new RotatedMode(), new ChaseMode(), new FirstPersonMode(), new IsometricMode()],
     previewSpeed: 0.05,
     showcase: {
       shots: [

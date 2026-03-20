@@ -50,6 +50,23 @@ export default class Player {
     this.syncMeshTransform();
   }
 
+  /** Full grid reset: pose behind the start line, zero velocity, lap state cleared (e.g. after menu preview moved the car). */
+  resetToGrid(track, direction) {
+    const start = track.getStartPosition(direction);
+    this.setWorldPose(start.x, start.z, start.angle);
+    this.vx = 0;
+    this.vz = 0;
+    this.speed = 0;
+    this.lap = 0;
+    this.sectorsVisited = 0;
+    this.currentSector = 0;
+    this.lapTimes = [];
+    this.lapStartTime = 0;
+    this.finished = false;
+    this.finishTime = 0;
+    this.initTrackIndex(track.sampled);
+  }
+
   syncMeshTransform() {
     this.mesh.position.set(this.x, 0, this.z);
     this.mesh.rotation.y = this.angle;

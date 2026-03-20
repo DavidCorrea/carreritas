@@ -36,7 +36,7 @@ Client-side game code as ES modules.
 
 ### Camera & rendering
 
-- `camera-modes/` — `CameraMode` implementations: top-down, rotated, chase, isometric; barrel `camera-modes/index.js`.
+- `camera-modes/` — `CameraMode` implementations: top-down, rotated, chase, first-person, isometric; barrel `camera-modes/index.js`.
 - `camera.js` — `Camera`: mode switching, follow, showcase cinematic shots.
 - `renderers/` — base `Renderer` plus `DayRenderer` / `NightRenderer` (lighting, fog, night headlights/underglow).
 

@@ -288,6 +288,7 @@ export const strings = {
       'TOP-DOWN': 'TOP-DOWN',
       ROTATED: 'ROTATED',
       CHASE: 'CHASE',
+      'FIRST-PERSON': 'FIRST-PERSON',
       ISOMETRIC: 'ISOMETRIC'
     }
   },

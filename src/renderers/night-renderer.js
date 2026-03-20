@@ -3,9 +3,10 @@ import Constants from '../constants.js';
 import { CAMERA_HEIGHT } from '../intrinsic-constants.js';
 import { hexToInt, hexToRgb, disposeMesh, disposeGroup } from '../utils/index.js';
 
-/** Indices in `Constants.camera.modes`: TOP-DOWN, ROTATED, CHASE, ISOMETRIC */
+/** Indices in `Constants.camera.modes`: TOP-DOWN, ROTATED, CHASE, FIRST-PERSON, ISOMETRIC */
 const CHASE_CAMERA_MODE_INDEX = 2;
-const ISOMETRIC_CAMERA_MODE_INDEX = 3;
+const FIRST_PERSON_CAMERA_MODE_INDEX = 3;
+const ISOMETRIC_CAMERA_MODE_INDEX = 4;
 
 const NIGHT_LIGHTING_CHASE = {
   ambient: 0.06,
@@ -30,8 +31,11 @@ const ISOMETRIC_POINT_LIGHT_SCALE = 0.76;
 /** Extra fog multiplier on top of distance-scaled density (was <1 for readability; now >1 to hide far track). */
 const ISOMETRIC_FOG_DENSITY_SCALE = 1.52;
 
+/** First-person: bumper offset; cone uses `fpSpotParamsFromHeadlightShape` + SHAPE slider. */
+const FP_BUMPER_OFFSET = Constants.car.radius * 0.48;
+
 function fogDensityForCamera(cameraModeIndex) {
-  if (cameraModeIndex === CHASE_CAMERA_MODE_INDEX) {
+  if (cameraModeIndex === CHASE_CAMERA_MODE_INDEX || cameraModeIndex === FIRST_PERSON_CAMERA_MODE_INDEX) {
     return NIGHT_LIGHTING_CHASE.fogDensity;
   }
   let rayToGround = CAMERA_HEIGHT;
@@ -154,9 +158,25 @@ function headlightParams(headlightShape) {
   return { length, halfAngle };
 }
 
+/** Writes FP spotlight cone params into `out` (no per-frame allocation). Same mapping as chase beam meshes. */
+function fpSpotParamsFromHeadlightShapeInto(headlightShape, out) {
+  const hp = headlightParams(headlightShape);
+  const t = (headlightShape != null ? headlightShape : 50) / 100;
+  out.angle = Math.min(Math.PI / 2 - 0.02, 2 * hp.halfAngle);
+  out.distance = 95 + hp.length * 0.72;
+  out.penumbra = 0.06 + (hp.halfAngle - 0.2) * 0.35;
+  out.intensity = 3.4 + t * 1.4;
+  out.aimDist = 55 + hp.length * 0.38;
+}
+
 export default class NightRenderer extends Renderer {
   constructor(scene, carSettings) {
     super(scene, carSettings);
+    /** Skip redundant fog/ambient work when camera mode unchanged. */
+    this._nightCachedIdx = undefined;
+    /** Recompute FP cone only when SHAPE slider changes. */
+    this._fpHeadlightShapeCached = null;
+    this._fpSpotScratch = { angle: 0, distance: 0, penumbra: 0, intensity: 0, aimDist: 0 };
     this.ambientLight = null;
     this.carPointLight = null;
     this.beamMeshL = null;
@@ -165,6 +185,7 @@ export default class NightRenderer extends Renderer {
     this.tailMesh = null;
     this.underglowMesh = null;
     this.underglowLight = null;
+    this.fpHeadlightSpot = null;
     this.setup(carSettings);
     this.applyNightSettings();
   }
@@ -177,6 +198,15 @@ export default class NightRenderer extends Renderer {
     const hp = headlightParams(carSettings.headlightShape);
     this.carPointLight = new THREE.PointLight(0xffe0a0, 0, 90, 2);
     this.scene.add(this.carPointLight);
+
+    const hlInt = hexToInt(carSettings.headlightsColor);
+    fpSpotParamsFromHeadlightShapeInto(carSettings.headlightShape, this._fpSpotScratch);
+    const fp0 = this._fpSpotScratch;
+    this.fpHeadlightSpot = new THREE.SpotLight(hlInt, fp0.intensity, fp0.distance, fp0.angle, fp0.penumbra, 2);
+    this.fpHeadlightSpot.castShadow = false;
+    this.fpHeadlightSpot.visible = false;
+    this.scene.add(this.fpHeadlightSpot);
+    this.scene.add(this.fpHeadlightSpot.target);
 
     this.beamMeshL = createBeamMesh(hp.length, hp.halfAngle, hlRgb);
     this.beamMeshR = createBeamMesh(hp.length, hp.halfAngle, hlRgb);
@@ -192,6 +222,7 @@ export default class NightRenderer extends Renderer {
     this.glowMesh.visible = false;
     this.tailMesh.visible = false;
     this.underglowMesh.visible = false;
+    this._fpHeadlightShapeCached = carSettings.headlightShape;
   }
 
   applyNightSettings() {
@@ -203,17 +234,25 @@ export default class NightRenderer extends Renderer {
 
   _applyNightLightingForCamera(cameraModeIndex) {
     const idx = cameraModeIndex ?? CHASE_CAMERA_MODE_INDEX;
-    const isChase = idx === CHASE_CAMERA_MODE_INDEX;
+    if (this._nightCachedIdx === idx) return;
+    this._nightCachedIdx = idx;
+    const isChaseLike = idx === CHASE_CAMERA_MODE_INDEX || idx === FIRST_PERSON_CAMERA_MODE_INDEX;
     const isIso = idx === ISOMETRIC_CAMERA_MODE_INDEX;
 
     let ambient = NIGHT_LIGHTING_CHASE.ambient;
-    let pointScale = isChase ? 1 : NONCHASE_POINT_LIGHT_SCALE;
+    let pointScale = isChaseLike ? 1 : NONCHASE_POINT_LIGHT_SCALE;
     if (isIso) {
       ambient = ISOMETRIC_NIGHT_AMBIENT;
       pointScale = ISOMETRIC_POINT_LIGHT_SCALE;
     }
     this.ambientLight.intensity = ambient;
     this.carPointLight.intensity = NIGHT_LIGHTING_CHASE.pointIntensity * pointScale;
+
+    if (idx === FIRST_PERSON_CAMERA_MODE_INDEX) {
+      // FP uses a spotlight to the road; the overhead point pool reads as a flat disc, not headlights.
+      this.carPointLight.intensity = 0;
+      this.ambientLight.intensity *= 1.08;
+    }
 
     if (this.scene.fog) {
       let d = fogDensityForCamera(idx);
@@ -255,6 +294,10 @@ export default class NightRenderer extends Renderer {
     outerAttr.needsUpdate = true;
 
     this.underglowLight.color.setHex(ugColorInt);
+
+    if (this.fpHeadlightSpot) {
+      this.fpHeadlightSpot.color.setHex(hexToInt(carSettings.headlightsColor));
+    }
   }
 
   rebuildMeshes(carSettings) {
@@ -282,21 +325,30 @@ export default class NightRenderer extends Renderer {
     this.glowMesh.visible = false;
     this.tailMesh.visible = false;
     this.underglowMesh.visible = false;
+    this._fpHeadlightShapeCached = null;
   }
 
   update(player, underglowOpacity, cameraModeIndex) {
     this._applyNightLightingForCamera(cameraModeIndex);
 
     const hasPlayer = !!player;
-    const showBeams = hasPlayer;
-    this.beamMeshL.visible = showBeams;
-    this.beamMeshR.visible = showBeams;
-    this.glowMesh.visible = showBeams;
-    this.tailMesh.visible = showBeams;
+    const isFirstPerson = cameraModeIndex === FIRST_PERSON_CAMERA_MODE_INDEX;
+    /** FP: spotlight only; chase/iso/top: additive beam meshes on the ground. */
+    const showBeamMeshes = hasPlayer && !isFirstPerson;
+    this.beamMeshL.visible = showBeamMeshes;
+    this.beamMeshR.visible = showBeamMeshes;
+    this.glowMesh.visible = showBeamMeshes;
+    this.tailMesh.visible = showBeamMeshes;
     this.underglowMesh.visible = hasPlayer && underglowOpacity > 0;
     this.underglowLight.intensity = hasPlayer ? 2.5 * (underglowOpacity / 100) : 0;
 
-    if (!hasPlayer) return;
+    if (!hasPlayer) {
+      if (this.fpHeadlightSpot) {
+        this.fpHeadlightSpot.visible = false;
+        this.fpHeadlightSpot.intensity = 0;
+      }
+      return;
+    }
 
     const fx = Math.sin(player.angle);
     const fz = Math.cos(player.angle);
@@ -304,14 +356,47 @@ export default class NightRenderer extends Renderer {
     this.underglowMesh.position.set(player.x, 0, player.z);
     this.underglowLight.position.set(player.x, 1.5, player.z);
 
-    if (!showBeams) return;
+    if (isFirstPerson) {
+      if (this.fpHeadlightSpot) {
+        const shape = this.carSettings.headlightShape;
+        if (this._fpHeadlightShapeCached !== shape) {
+          this._fpHeadlightShapeCached = shape;
+          fpSpotParamsFromHeadlightShapeInto(shape, this._fpSpotScratch);
+        }
+        const fp = this._fpSpotScratch;
+        this.fpHeadlightSpot.angle = fp.angle;
+        this.fpHeadlightSpot.distance = fp.distance;
+        this.fpHeadlightSpot.penumbra = fp.penumbra;
+        this.fpHeadlightSpot.intensity = fp.intensity;
+        const aim = fp.aimDist;
+        this.fpHeadlightSpot.visible = true;
+        this.fpHeadlightSpot.position.set(
+          player.x + fx * FP_BUMPER_OFFSET,
+          2.05,
+          player.z + fz * FP_BUMPER_OFFSET
+        );
+        this.fpHeadlightSpot.target.position.set(
+          player.x + fx * aim,
+          0.06,
+          player.z + fz * aim
+        );
+        this.fpHeadlightSpot.target.updateMatrixWorld();
+      }
+      return;
+    }
 
     const headlightFwd = Constants.car.radius * 0.6;
 
+    if (this.fpHeadlightSpot) {
+      this.fpHeadlightSpot.visible = false;
+      this.fpHeadlightSpot.intensity = 0;
+    }
+
     this.beamMeshL.position.set(player.x + fx * headlightFwd, 0, player.z + fz * headlightFwd);
-    this.beamMeshL.rotation.y = player.angle - 0.06;
+    this.beamMeshL.rotation.set(0, player.angle - 0.06, 0);
+
     this.beamMeshR.position.set(player.x + fx * headlightFwd, 0, player.z + fz * headlightFwd);
-    this.beamMeshR.rotation.y = player.angle + 0.06;
+    this.beamMeshR.rotation.set(0, player.angle + 0.06, 0);
 
     this.glowMesh.position.set(player.x, 0, player.z);
     this.tailMesh.position.set(player.x - fx * Constants.car.radius, 0, player.z - fz * Constants.car.radius);
@@ -328,6 +413,11 @@ export default class NightRenderer extends Renderer {
     
     if (this.ambientLight) this.scene.remove(this.ambientLight);
     if (this.carPointLight) this.scene.remove(this.carPointLight);
+    if (this.fpHeadlightSpot) {
+      this.scene.remove(this.fpHeadlightSpot.target);
+      this.scene.remove(this.fpHeadlightSpot);
+      this.fpHeadlightSpot = null;
+    }
     if (this.underglowLight) this.scene.remove(this.underglowLight);
     
     if (this.beamMeshL) this.scene.remove(this.beamMeshL);

@@ -74,6 +74,9 @@ export class CountdownState extends GameState {
     context.ghost.setVisibleWhenPresent(true);
     context.menuPreviewActive = false;
     context.cam.stopShowcase();
+    if (context.player && context.track) {
+      context.player.resetToGrid(context.track, context.direction);
+    }
     if (context.player) {
       context.cam.applyMode(context.player);
     }
