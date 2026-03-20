@@ -1,6 +1,7 @@
 import { CAR_RADIUS, CAMERA_HEIGHT } from './intrinsic-constants.js';
 import { TopDownMode, RotatedMode, ChaseMode, FirstPersonMode, IsometricMode } from './camera-modes/index.js';
 import { SolidPattern, RingPattern, HalfPattern, StripePattern, GradientPattern, RadialPattern, SpiralPattern, DotsPattern, BullseyePattern } from './car-patterns/index.js';
+import countriesList from './countries-data.json' with { type: 'json' };
 
 const MENU_PREVIEW_FPS = 60;
 
@@ -112,7 +113,8 @@ const Constants = {
     return import.meta.env.DEV === true;
   })(),
 
-  countries: []
+  /** `[ISO 3166-1 alpha-2, English name][]` sorted by name — registration country `<select>`. */
+  countries: countriesList
 };
 
 // Set default pattern after patterns array is created
