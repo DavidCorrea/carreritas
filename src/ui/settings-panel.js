@@ -126,9 +126,16 @@ export default class SettingsPanel {
     el.addEventListener('input', function () { handler('headlightsColor', el.value); });
   }
 
-  onHeadlightShapeChange(handler) {
+  /** While dragging; fires often (no heavy GPU work here). */
+  onHeadlightShapeInput(handler) {
     const el = this._headlightShapeEl;
     el.addEventListener('input', function () { handler(parseInt(el.value, 10)); });
+  }
+
+  /** Once per commit (mouseup / keyboard); use for mesh rebuilds. */
+  onHeadlightShapeCommit(handler) {
+    const el = this._headlightShapeEl;
+    el.addEventListener('change', function () { handler(parseInt(el.value, 10)); });
   }
 
   onUnderglowChange(handler) {

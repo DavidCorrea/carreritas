@@ -1238,7 +1238,13 @@ export default class Game {
       this.sceneDirty = true;
     });
 
-    this.settingsPanel.onHeadlightShapeChange((value) => {
+    this.settingsPanel.onHeadlightShapeInput((value) => {
+      this.carSettings.headlightShape = value;
+      this.saveSettings();
+      this.switchPreviewToNight();
+      this.sceneDirty = true;
+    });
+    this.settingsPanel.onHeadlightShapeCommit((value) => {
       this.carSettings.headlightShape = value;
       this.saveSettings();
       this.switchPreviewToNight();

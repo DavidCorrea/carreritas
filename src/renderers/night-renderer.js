@@ -176,6 +176,8 @@ export default class NightRenderer extends Renderer {
     this._nightCachedIdx = undefined;
     /** Recompute FP cone only when SHAPE slider changes. */
     this._fpHeadlightShapeCached = null;
+    /** Beam geometry matches this shape; FP spotlight uses `carSettings` without rebuilding beams. */
+    this._beamShapeAtRebuild = null;
     this._fpSpotScratch = { angle: 0, distance: 0, penumbra: 0, intensity: 0, aimDist: 0 };
     this.ambientLight = null;
     this.carPointLight = null;
@@ -223,6 +225,7 @@ export default class NightRenderer extends Renderer {
     this.tailMesh.visible = false;
     this.underglowMesh.visible = false;
     this._fpHeadlightShapeCached = carSettings.headlightShape;
+    this._beamShapeAtRebuild = carSettings.headlightShape;
   }
 
   applyNightSettings() {
@@ -326,6 +329,7 @@ export default class NightRenderer extends Renderer {
     this.tailMesh.visible = false;
     this.underglowMesh.visible = false;
     this._fpHeadlightShapeCached = null;
+    this._beamShapeAtRebuild = carSettings.headlightShape;
   }
 
   update(player, underglowOpacity, cameraModeIndex) {
@@ -335,10 +339,6 @@ export default class NightRenderer extends Renderer {
     const isFirstPerson = cameraModeIndex === FIRST_PERSON_CAMERA_MODE_INDEX;
     /** FP: spotlight only; chase/iso/top: additive beam meshes on the ground. */
     const showBeamMeshes = hasPlayer && !isFirstPerson;
-    this.beamMeshL.visible = showBeamMeshes;
-    this.beamMeshR.visible = showBeamMeshes;
-    this.glowMesh.visible = showBeamMeshes;
-    this.tailMesh.visible = showBeamMeshes;
     this.underglowMesh.visible = hasPlayer && underglowOpacity > 0;
     this.underglowLight.intensity = hasPlayer ? 2.5 * (underglowOpacity / 100) : 0;
 
@@ -347,8 +347,21 @@ export default class NightRenderer extends Renderer {
         this.fpHeadlightSpot.visible = false;
         this.fpHeadlightSpot.intensity = 0;
       }
+      this.beamMeshL.visible = false;
+      this.beamMeshR.visible = false;
+      this.glowMesh.visible = false;
+      this.tailMesh.visible = false;
       return;
     }
+
+    if (!isFirstPerson && this.carSettings.headlightShape !== this._beamShapeAtRebuild) {
+      this.rebuildMeshes(this.carSettings);
+    }
+
+    this.beamMeshL.visible = showBeamMeshes;
+    this.beamMeshR.visible = showBeamMeshes;
+    this.glowMesh.visible = showBeamMeshes;
+    this.tailMesh.visible = showBeamMeshes;
 
     const fx = Math.sin(player.angle);
     const fz = Math.cos(player.angle);
