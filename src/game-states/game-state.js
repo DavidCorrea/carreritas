@@ -45,7 +45,7 @@ export class MenuState extends GameState {
       }
       if (context.menuPreviewActive && context.player && context.track) {
         context.updatePreviewDrive(dt);
-        context.cam.updateShowcase(dt, context.player);
+        context.cam.updateShowcase(dt, context.player, false);
         const now = performance.now();
         if (now - context.menuPreviewLastRender >= Constants.menu.previewFrameIntervalMs) {
           context.sceneDirty = true;

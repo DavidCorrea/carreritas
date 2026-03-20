@@ -9,12 +9,20 @@ export default class Camera {
     this.showcaseActive = false;
     this.showcaseTimer = 0;
     this.showcaseShotIndex = 0;
+    /** @type {-1 | number} */
+    this._showcaseFixedShotId = -1;
+    /** Snapshot of previous fixed rig before initing the next (fixed→fixed transition blend). */
+    this._fixedPrevForTransition = null;
+    this._defaultPerspFov = perspCamera.fov;
   }
 
   startShowcase() {
     this.showcaseActive = true;
     this.showcaseTimer = 0;
     this.showcaseShotIndex = 0;
+    this._showcaseFixedShotId = -1;
+    this._fixedPrevForTransition = null;
+    this._fixedShowcasePos = null;
   }
 
   stopShowcase() {
@@ -51,6 +59,7 @@ export default class Camera {
   }
 
   applyMode(player) {
+    this.persp.fov = this._defaultPerspFov;
     const mode = Constants.camera.modes[this.modeIndex];
     if (mode.usesPerspective) {
       this.active = this.persp;
@@ -87,37 +96,116 @@ export default class Camera {
     };
   }
 
-  updateShowcase(dt, player) {
+  _showcaseShots(includeRunningOnly) {
+    const c = Constants.camera.showcase;
+    return includeRunningOnly ? c.shotsRunning : c.shotsIdle;
+  }
+
+  /** World-fixed camera beside the track at shot start; car moves past while the rig stays put. */
+  _initFixedShowcaseShot(player, shot) {
+    const lateral = shot.lateral ?? 95;
+    const side = shot.side ?? 1;
+    const px = player.x + side * lateral * Math.cos(player.angle);
+    const pz = player.z - side * lateral * Math.sin(player.angle);
+    this._fixedShowcasePos = {
+      x: px,
+      y: shot.height,
+      z: pz,
+      lookY: shot.lookY ?? 2
+    };
+  }
+
+  /**
+   * @param {number} dt
+   * @param {import('./player.js').default} player
+   * @param {boolean} [includeRunningOnlyShots] Settings preview with drive = RUNNING: includes trackside fixed shot.
+   */
+  updateShowcase(dt, player, includeRunningOnlyShots = false) {
     if (!player) return;
     this.active = this.persp;
 
+    const shots = this._showcaseShots(includeRunningOnlyShots);
+    const n = shots.length;
+
     this.showcaseTimer += dt;
-    let shot = Constants.camera.showcase.shots[this.showcaseTimer < 0 ? 0 : this.showcaseShotIndex];
+    let idx = this.showcaseShotIndex % n;
+    let shot = shots[idx];
     let elapsed = this.showcaseTimer;
 
     if (elapsed >= shot.duration) {
       this.showcaseTimer = 0;
       elapsed = 0;
-      this.showcaseShotIndex = (this.showcaseShotIndex + 1) % Constants.camera.showcase.shots.length;
-      shot = Constants.camera.showcase.shots[this.showcaseShotIndex];
+      this.showcaseShotIndex = (this.showcaseShotIndex + 1) % n;
+      idx = this.showcaseShotIndex % n;
+      shot = shots[idx];
     }
 
-    const angleOffset = this.showcaseShotIndex * 1.8;
-    const pos = this.showcaseShotPosition(shot, elapsed, angleOffset, player);
+    const angleOffset = idx * 1.8;
 
-    if (elapsed < Constants.camera.showcase.transition) {
-      const prevIndex = (this.showcaseShotIndex - 1 + Constants.camera.showcase.shots.length) % Constants.camera.showcase.shots.length;
-      const prevShot = Constants.camera.showcase.shots[prevIndex];
+    let pos;
+    if (shot.type === 'fixed') {
+      if (this._showcaseFixedShotId !== idx) {
+        if (this._showcaseFixedShotId >= 0 && this._fixedShowcasePos) {
+          this._fixedPrevForTransition = {
+            x: this._fixedShowcasePos.x,
+            y: this._fixedShowcasePos.y,
+            z: this._fixedShowcasePos.z,
+            lookY: this._fixedShowcasePos.lookY
+          };
+        }
+        this._initFixedShowcaseShot(player, shot);
+        this._showcaseFixedShotId = idx;
+      }
+      pos = {
+        x: this._fixedShowcasePos.x,
+        y: this._fixedShowcasePos.y,
+        z: this._fixedShowcasePos.z,
+        lookY: this._fixedShowcasePos.lookY
+      };
+    } else {
+      this._showcaseFixedShotId = -1;
+      pos = this.showcaseShotPosition(shot, elapsed, angleOffset, player);
+    }
+
+    const transition = Constants.camera.showcase.transition;
+    let fov = shot.fov ?? this._defaultPerspFov;
+
+    if (elapsed < transition) {
+      const prevIndex = (idx - 1 + n) % n;
+      const prevShot = shots[prevIndex];
       const prevAngle = prevIndex * 1.8;
-      const prevPos = this.showcaseShotPosition(prevShot, prevShot.duration, prevAngle, player);
-      let t = elapsed / Constants.camera.showcase.transition;
+      let prevPos;
+      if (prevShot.type === 'fixed') {
+        const fixedToFixed = shot.type === 'fixed' && this._fixedPrevForTransition;
+        if (fixedToFixed) {
+          prevPos = { ...this._fixedPrevForTransition };
+        } else if (this._fixedShowcasePos) {
+          prevPos = {
+            x: this._fixedShowcasePos.x,
+            y: this._fixedShowcasePos.y,
+            z: this._fixedShowcasePos.z,
+            lookY: this._fixedShowcasePos.lookY
+          };
+        } else {
+          prevPos = this.showcaseShotPosition(prevShot, prevShot.duration, prevAngle, player);
+        }
+      } else {
+        prevPos = this.showcaseShotPosition(prevShot, prevShot.duration, prevAngle, player);
+      }
+      let t = elapsed / transition;
       t = t * t * (3 - 2 * t);
       pos.x = prevPos.x + (pos.x - prevPos.x) * t;
       pos.y = prevPos.y + (pos.y - prevPos.y) * t;
       pos.z = prevPos.z + (pos.z - prevPos.z) * t;
       pos.lookY = prevPos.lookY + (pos.lookY - prevPos.lookY) * t;
+      const prevFov = prevShot.fov ?? this._defaultPerspFov;
+      fov = prevFov + (fov - prevFov) * t;
     }
 
+    this.persp.fov = fov;
+    this.persp.updateProjectionMatrix();
+
+    this.active.up.set(0, 1, 0);
     this.active.position.set(pos.x, pos.y, pos.z);
     this.active.lookAt(player.x, pos.lookY, player.z);
   }

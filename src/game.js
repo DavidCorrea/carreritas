@@ -1336,6 +1336,7 @@ export default class Game {
     this.settingsPanel.onPreviewDriveToggle((running) => {
       this.previewRunning = running;
       if (this.previewRunning) this.previewT = 0;
+      if (this.cam.isShowcaseActive()) this.cam.startShowcase();
       this.sceneDirty = true;
     });
   }
@@ -1383,7 +1384,7 @@ export default class Game {
       // per-frame showcase orbit or chase / other fixed modes (applyMode only runs once).
       if (!this.settingsPanel.isOpen()) return;
       if (this.cam.isShowcaseActive()) {
-        this.cam.updateShowcase(dt, this.player);
+        this.cam.updateShowcase(dt, this.player, this.previewRunning);
       } else {
         this.cam.update(this.player, dt);
       }
@@ -1392,7 +1393,7 @@ export default class Game {
     }
 
     if (this.cam.isShowcaseActive()) {
-      this.cam.updateShowcase(dt, this.player);
+      this.cam.updateShowcase(dt, this.player, false);
       this.sceneDirty = true;
       return;
     }
