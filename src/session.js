@@ -33,15 +33,14 @@ export class Session {
 export const GuestSession = new Session();
 
 export class UserSession extends Session {
-  constructor(apiClient, getChallengeMode) {
+  constructor(apiClient) {
     super();
     this.apiClient = apiClient;
-    this.getChallengeMode = getChallengeMode;
   }
 
-  static fromAuth(auth, getChallengeMode) {
+  static fromAuth(auth) {
     const apiClient = new ApiClient(function () { return auth.getToken(); });
-    return new UserSession(apiClient, getChallengeMode);
+    return new UserSession(apiClient);
   }
 
   loadSettings(callback) {
@@ -66,32 +65,10 @@ export class UserSession extends Session {
   }
 
   loadBest(code, laps, direction, mode, callback) {
-    const cm = this.getChallengeMode();
-    if (cm !== 'daily-race' && cm !== 'weekly-race') {
-      super.loadBest(code, laps, direction, mode, callback);
-      return;
-    }
-    void (async () => {
-      try {
-        const data = await this.apiClient.getTimes(code, laps, direction, mode);
-        if (data.times && data.times.length > 0) {
-          const t = data.times[0];
-          const replay = t.ghost_data ? storage.decodeReplay(t.ghost_data) : null;
-          callback({ time: t.time_ms, replay });
-        } else {
-          GuestSession.loadBest(code, laps, direction, mode, callback);
-        }
-      } catch {
-        GuestSession.loadBest(code, laps, direction, mode, callback);
-      }
-    })();
+    super.loadBest(code, laps, direction, mode, callback);
   }
 
   saveBest(code, laps, direction, mode, time, frames) {
     super.saveBest(code, laps, direction, mode, time, frames);
-    const cm = this.getChallengeMode();
-    if (cm === 'daily-race' || cm === 'weekly-race') {
-      this.apiClient.saveTime(code, laps, direction, mode, time, storage.encodeReplay(frames)).catch(function () {});
-    }
   }
 }

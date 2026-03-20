@@ -106,7 +106,7 @@ export default class ResultsPresenter {
         }
         results.setPrompt(strings.document.results.promptRetryMenu);
 
-        game.runContext.maybeSaveSeriesChallengeTime(game, totalTime);
+        results.showLeaderboardButton(!!game.runContext.getChallengeMode());
       } else {
         const r = strings.results;
         results.setTitle(r.stageComplete(run.currentStageIndex + 1));
@@ -126,6 +126,7 @@ export default class ResultsPresenter {
           );
         }
         results.setPrompt(r.promptNextStage(run.currentStageIndex + 2));
+        results.showLeaderboardButton(!!game.runContext.getChallengeMode());
       }
     } else {
       const r = strings.results;
@@ -151,6 +152,7 @@ export default class ResultsPresenter {
         );
       }
       results.setPrompt(strings.document.results.promptRetryMenu);
+      results.showLeaderboardButton(!!game.runContext.getChallengeMode());
     }
   }
 }

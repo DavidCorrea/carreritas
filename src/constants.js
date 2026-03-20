@@ -88,7 +88,8 @@ const Constants = {
   storage: {
     prefix: 'haxrace_ghost_',
     settingsKey: 'carreritas_settings',
-    authKey: 'carreritas_auth'
+    authKey: 'carreritas_auth',
+    arcadeNameKey: 'carreritas_arcade_name'
   },
 
   share: {

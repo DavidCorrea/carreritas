@@ -45,7 +45,7 @@ export default class LeaderboardPanel {
 
     const name = document.createElement('span');
     name.className = 'lb-name lb-cell-fade';
-    name.textContent = entry.username;
+    name.textContent = entry.display_name || entry.username;
     row.appendChild(name);
 
     const time = document.createElement('span');

@@ -16,7 +16,8 @@ import {
   formatCountdown,
   utcDateStr,
   utcMondayStr,
-  challengeStatsMessage
+  challengeStatsMessage,
+  dailySeriesConfig
 } from './utils/index.js';
 import ApiClient from './api.js';
 import Track from './track.js';
@@ -29,7 +30,7 @@ import { DayRenderer, NightRenderer } from './renderers/index.js';
 import Input from './input.js';
 import Auth from './auth.js';
 import UserProfile from './user.js';
-import { Menu, Hud, ResultsScreen, ResultsPresenter, RecordsPanel, LeaderboardPanel, AuthPanel, AccountBar, SettingsPanel } from './ui/index.js';
+import { Menu, Hud, ResultsScreen, ResultsPresenter, RecordsPanel, LeaderboardPanel, AuthPanel, SettingsPanel } from './ui/index.js';
 import { FwdDirection, Direction } from './directions/index.js';
 import { DayMode, NightMode, Mode } from './modes/index.js';
 import { ChallengeMode } from './challenge-modes/index.js';
@@ -81,6 +82,8 @@ export default class Game {
     this._mountInitialTrack(startCode, openedSeriesFromUrl);
     this.stateMachine = new StateMachine(new MenuState());
     this._wireUiCallbacks();
+    this.menu.showTab('challenges');
+    this.renderChallengePreview();
     this._bindResize();
     this._bindPersistGuards();
     requestAnimationFrame((t) => this.gameLoop(t));
@@ -180,18 +183,9 @@ export default class Game {
     this.apiClient.updateSettings(this.carSettings).catch(function () {});
   }
 
-  showAuthPanel() {
-    this.auth.showLogin();
-    this.inputContext.setActive(this.auth);
-  }
-
   hideAuthPanel() {
     this.auth.hide();
     this.inputContext.clear(this.auth);
-  }
-
-  updateAccountBar() {
-    this.accountBar.update(this.authManager.isLoggedIn(), this.userProfile.getUsername(), this.userProfile.getCountry(), countryFlag);
   }
 
   async handleAuthSubmit(e) {
@@ -213,7 +207,6 @@ export default class Game {
       this.userProfile.save(data.username, data.country);
       this.session = this.userSession;
       this.hideAuthPanel();
-      this.updateAccountBar();
       this.uploadLocalData();
       if (!creds.isRegister) {
         this.session.loadSettings((remote) => {
@@ -555,7 +548,106 @@ export default class Game {
   showResultsScreen() {
     this.resultsPresenter.present(this);
     this.results.show();
+    void this._submitChallengeLeaderboard();
     this.stateMachine.transitionTo(new FinishedState(), this);
+  }
+
+  _serializeCarSettingsForApi() {
+    const s = this.carSettings;
+    const pat = s.pattern;
+    return {
+      pattern: pat && pat.name ? pat.name : 'solid',
+      primaryColor: s.primaryColor,
+      secondaryColor: s.secondaryColor,
+      headlightsColor: s.headlightsColor,
+      headlightShape: s.headlightShape,
+      underglowColor: s.underglowColor,
+      underglowOpacity: s.underglowOpacity
+    };
+  }
+
+  /**
+   * Official challenge only: fetch board, optional name prompt, POST /api/submit. CASUAL (no challenge mode) skips.
+   */
+  async _submitChallengeLeaderboard() {
+    const cm = this.runContext.getChallengeMode();
+    if (!cm) return;
+    if (Constants.fakeChallengeLeaderboards) return;
+    if (this.seriesMode && !this.currentRun.isFinalStage(this.stageCount)) return;
+
+    const key = this.runContext.getChallengeKey(utcDateStr(), utcMondayStr());
+
+    let leaderboardData;
+    let compareTime;
+
+    if (cm.isSeries()) {
+      leaderboardData = await this.apiClient.fetchChallengeLeaderboard(key);
+      const snap = this.currentRun.getSeriesResultsSnapshot();
+      compareTime = 0;
+      for (let i = 0; i < snap.length; i++) compareTime += snap[i].time;
+    } else {
+      const info = challengeConfigForMode(cm);
+      if (!info) return;
+      leaderboardData = await this.apiClient.fetchLeaderboard(
+        info.config.code,
+        info.config.laps,
+        info.config.direction,
+        info.config.mode
+      );
+      compareTime = this.player.finishTime;
+    }
+
+    const entries = leaderboardData.entries || [];
+    let qualifies = true;
+    if (entries.length >= 10) {
+      qualifies = compareTime <= entries[9].time_ms;
+    }
+    if (!qualifies) {
+      this.results.addRow(strings.results.betterLuckNextTime, { className: 'arcade-lb-msg' });
+      return;
+    }
+
+    const defaultName = Storage.shared.getArcadeName();
+    const raw = window.prompt(strings.results.arcadeNamePrompt, defaultName);
+    if (raw == null) return;
+    const displayName = raw.trim().slice(0, 20);
+    if (!displayName) return;
+    Storage.shared.setArcadeName(displayName);
+
+    try {
+      if (cm.isSeries()) {
+        const snap = this.currentRun.getSeriesResultsSnapshot();
+        const stages = snap.map(function (sr) {
+          return {
+            track_code: sr.code,
+            laps: this.totalLaps,
+            reversed: sr.direction.isRev(),
+            night_mode: sr.mode.isNight(),
+            time_ms: sr.time
+          };
+        }.bind(this));
+        await this.apiClient.submitLeaderboardTime({
+          challenge_key: key,
+          display_name: displayName,
+          stages
+        });
+      } else {
+        const info = challengeConfigForMode(cm);
+        const packed = Storage.shared.encodeReplay(this.currentRun.getRecording());
+        await this.apiClient.submitLeaderboardTime({
+          track_code: info.config.code,
+          laps: info.config.laps,
+          reversed: info.config.direction.isRev(),
+          night_mode: info.config.mode.isNight(),
+          time_ms: compareTime,
+          display_name: displayName,
+          ghost_data: packed,
+          car_settings: this._serializeCarSettingsForApi()
+        });
+      }
+    } catch {
+      /* network / server error — ignore */
+    }
   }
 
   startPostRaceReplay() {
@@ -665,7 +757,6 @@ export default class Game {
     if (this.settingsPanel.isOpen()) this.hideSettings();
     this.menuPreviewActive = false;
     this.menu.hide();
-    this.accountBar.hide();
     this.records.show();
     this.inputContext.setActive(this.records);
 
@@ -701,7 +792,6 @@ export default class Game {
     }
     this.records.hide();
     this.inputContext.clear(this.records);
-    this.accountBar.show();
     this.menu.show();
   }
 
@@ -760,7 +850,6 @@ export default class Game {
     this.settingsPanel.setPreviewDrive(false);
 
     this.menu.hide();
-    this.accountBar.hide();
     this.settingsPanel.show();
     this.inputContext.setActive(this.settingsPanel);
     this.settingsPanel.showBackButton(true);
@@ -813,7 +902,6 @@ export default class Game {
     this.settingsPanel.hide();
     this.inputContext.clear(this.settingsPanel);
     this.settingsPanel.showBackButton(false);
-    this.accountBar.show();
     this.menu.show();
   }
 
@@ -838,7 +926,7 @@ export default class Game {
     /** Which series stage the menu 3D preview reflects (0-based). */
     this.menuSeriesPreviewStageIndex = 0;
     this.runContext = RunContext.event();
-    this.stageCount = 3;
+    this.stageCount = dailySeriesConfig().stageCount;
     this.stageConfigs = [
       { code: '', direction: new FwdDirection(), mode: new DayMode() },
       { code: '', direction: new FwdDirection(), mode: new DayMode() },
@@ -890,13 +978,14 @@ export default class Game {
     this.records = new RecordsPanel(function (code) { return new TrackCode(code).toSVG(); }, formatDescriptor);
     this.leaderboard = new LeaderboardPanel(countryFlag);
     this.auth = new AuthPanel(Constants.countries, countryFlag);
-    this.accountBar = new AccountBar();
     this.settingsPanel = new SettingsPanel();
     this.ghost = new Ghost();
     this.resultsPresenter = new ResultsPresenter(this.results);
 
-    this.userSession = UserSession.fromAuth(this.authManager, () => this.runContext.getChallengeSlug());
+    this.userSession = UserSession.fromAuth(this.authManager);
     this.session = GuestSession;
+
+    this.menu.setStageCount(this.stageCount);
   }
 
   // ---------------------------------------------------------------------------
@@ -905,7 +994,6 @@ export default class Game {
 
   _bootstrapSessionUi() {
     this.loadAuth();
-    this.updateAccountBar();
   }
 
   _configureMobileShell() {
@@ -924,6 +1012,8 @@ export default class Game {
     if (lb) lb.textContent = m.back;
     if (rb) rb.textContent = m.back;
     if (sb) sb.textContent = m.back;
+    const menuTouchHint = el('menu-touch-hint');
+    if (menuTouchHint) menuTouchHint.textContent = m.menuOverlayHint;
     this.auth.setCloseText(strings.document.auth.closeMobile);
     const startFromMenuIfReady = () => {
       if (this.stateMachine.current.isMenu() && !this.records.isOpen() && !this.settingsPanel.isOpen() && !this.leaderboard.isOpen()) {
@@ -1326,16 +1416,6 @@ export default class Game {
 
     this.auth.onSubmit(this.handleAuthSubmit.bind(this));
     this.auth.onClose(this.hideAuthPanel.bind(this));
-    this.accountBar.onLogout(() => {
-      this.authManager.clearAuth();
-      this.userProfile.username = null;
-      this.userProfile.country = null;
-      this.session = GuestSession;
-      this.updateAccountBar();
-    });
-    this.accountBar.onLogin(() => {
-      this.showAuthPanel();
-    });
 
     this.results.onReplay(() => {
       if (this.stateMachine.current.isFinished()) this.startPostRaceReplay();

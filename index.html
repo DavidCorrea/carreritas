@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Carreritas</title>
   <meta name="description" content="A top-down racing game — generate tracks from any text, race your ghost, and challenge friends.">
   <meta property="og:type" content="website">
@@ -28,14 +28,6 @@
     <div id="controls-hint" class="hud-box">W/&#8593; S/&#8595; A/&#8592; D/&#8594; &nbsp; SPACE Restart &nbsp; C Camera</div>
   </div>
 
-  <div id="account-bar">
-    <button id="records-btn" type="button">BEST RUNS</button>
-    <button id="settings-btn" type="button">CAR SETTINGS</button>
-    <span class="account-user" id="account-username"></span>
-    <button id="login-btn" type="button">LOGIN</button>
-    <button id="logout-btn" type="button" style="display:none;">LOGOUT</button>
-  </div>
-
   <div id="auth">
     <h2 id="auth-title">LOGIN</h2>
     <form id="auth-form" autocomplete="off">
@@ -51,16 +43,19 @@
 
   <div id="overlay">
     <h1>CARRERITAS</h1>
-    <p class="subtitle">W / &#8593; Accelerate &nbsp;&nbsp; S / &#8595; Brake</p>
-    <p class="subtitle">A / &#8592; Steer Left &nbsp;&nbsp; D / &#8594; Steer Right</p>
-    <p class="subtitle">SPACE Restart &nbsp;&nbsp; C Camera</p>
-    <div class="seg-control" id="menu-tab-toggle" style="margin-top:1.5rem;">
-      <button type="button" class="seg-option selected" data-val="event">CASUAL</button>
-      <button type="button" class="seg-option" data-val="challenges">LEADERBOARD</button>
+    <div class="menu-util-strip">
+      <div class="menu-util-row">
+        <button id="records-btn" type="button">BEST RUNS</button>
+        <button id="settings-btn" type="button">CAR SETTINGS</button>
+      </div>
     </div>
-    <div id="event-tab">
-      <div class="menu-card">
-        <p class="track-label">RACE</p>
+    <div class="menu-card" id="menu-shell">
+      <div class="seg-control" id="menu-tab-toggle">
+        <button type="button" class="seg-option selected" data-val="challenges">LEADERBOARD</button>
+        <button type="button" class="seg-option" data-val="event">CASUAL</button>
+      </div>
+      <hr class="menu-divider menu-tab-divider">
+      <div id="event-tab" style="display:none;">
         <div class="seg-control" id="race-type-toggle">
           <button type="button" class="seg-option selected" data-val="SINGLE">SINGLE</button>
           <button type="button" class="seg-option" data-val="SERIES">SERIES</button>
@@ -102,7 +97,9 @@
             </div>
             <button id="rng-all-btn" type="button">RNG ALL</button>
           </div>
-          <div id="stage-list" style="margin-top:0.75rem"></div>
+          <div class="stage-list-scroll">
+            <div id="stage-list"></div>
+          </div>
         </div>
         <p class="track-label" id="laps-label">LAPS</p>
         <div class="stepper">
@@ -111,10 +108,7 @@
           <button id="laps-plus" type="button">+</button>
         </div>
       </div>
-      <p class="start-prompt" id="event-start-prompt">Press ENTER to start</p>
-    </div>
-    <div id="challenges-tab" style="display:none;">
-      <div id="challenge-card">
+      <div id="challenges-tab">
         <div class="seg-control" id="challenge-mode-toggle">
           <button type="button" class="seg-option selected" data-val="daily-race">DAILY RACE</button>
           <button type="button" class="seg-option" data-val="daily-series">DAILY SERIES</button>
@@ -126,7 +120,16 @@
         <button id="leaderboard-menu-btn" type="button" class="challenge-lb-btn">TOP 10</button>
         <div class="challenge-lb-subtitle" id="challenge-lb-subtitle"><span></span></div>
       </div>
+    </div>
+    <div class="menu-footer">
+      <p class="start-prompt" id="event-start-prompt" style="display:none;">Press ENTER to start</p>
       <p class="start-prompt" id="challenge-start-prompt">Press ENTER to start</p>
+      <div class="menu-hints">
+        <p class="subtitle">W / &#8593; Accelerate &nbsp;&nbsp; S / &#8595; Brake</p>
+        <p class="subtitle">A / &#8592; Steer Left &nbsp;&nbsp; D / &#8594; Steer Right</p>
+        <p class="subtitle">SPACE Restart &nbsp;&nbsp; C Camera</p>
+      </div>
+      <p class="menu-touch-hint" id="menu-touch-hint"></p>
     </div>
     <a href="https://github.com/DavidCorrea/carreritas" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
@@ -163,7 +166,7 @@
   <div id="records" class="hidden">
     <h2>BEST RUNS</h2>
     <div id="records-list"></div>
-    <p class="start-prompt" id="records-back" style="font-size:0.875rem; margin-top:2rem; cursor:pointer;">ESC Back</p>
+    <p class="start-prompt" id="records-back" style="font-size:0.875rem; cursor:pointer;">ESC Back</p>
   </div>
 
   <div id="settings" class="hidden">

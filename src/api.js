@@ -42,22 +42,11 @@ export default class ApiClient {
     return this._request('GET', '/api/times' + qs);
   }
 
-  saveTime(code, laps, direction, mode, time, ghostData) {
-    return this._request('POST', '/api/times', {
-      track_code: code,
-      laps,
-      reversed: direction.isRev(),
-      night_mode: mode.isNight(),
-      time_ms: time,
-      ghost_data: ghostData
-    });
-  }
-
-  saveChallengeTime(challengeKey, time) {
-    return this._request('POST', '/api/challenge', {
-      challenge_key: challengeKey,
-      time_ms: time
-    });
+  /**
+   * Anonymous leaderboard submission (official challenges).
+   */
+  submitLeaderboardTime(payload) {
+    return this._request('POST', '/api/submit', payload);
   }
 
   async fetchLeaderboard(code, laps, direction, mode) {

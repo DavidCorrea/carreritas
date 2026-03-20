@@ -94,6 +94,18 @@ export default class Storage {
     this.setAuthRecord(existing);
   }
 
+  getArcadeName() {
+    try {
+      return this._getItem(Constants.storage.arcadeNameKey) || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  setArcadeName(name) {
+    if (name) this._setItem(Constants.storage.arcadeNameKey, name);
+  }
+
   clearAuthProfileKeepToken() {
     const saved = this.getAuthRecord();
     if (saved && saved.token) {

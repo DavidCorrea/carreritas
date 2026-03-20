@@ -1,3 +1,5 @@
+import Direction from '../directions/direction.js';
+import Mode from '../modes/mode.js';
 import { formatTime } from '../utils/index.js';
 import { strings } from '../strings.js';
 
@@ -48,10 +50,15 @@ export default class RecordsPanel {
       const info = document.createElement('div');
       info.className = 'record-card-info';
 
-      const codeP = document.createElement('p');
-      codeP.className = 'record-card-code';
-      codeP.textContent = self._formatDescriptor(rec.code, rec.reversed, rec.nightMode, rec.laps);
-      info.appendChild(codeP);
+      const dir = rec.direction || Direction.fromBoolean(rec.reversed);
+      const mode = rec.mode || Mode.fromBoolean(rec.nightMode);
+      const fullDescriptor = self._formatDescriptor(rec.code, rec.reversed, rec.nightMode, rec.laps);
+
+      const summaryP = document.createElement('p');
+      summaryP.className = 'record-card-summary';
+      summaryP.textContent = dir.toString() + ' · ' + mode.toString() + ' · ' + rec.laps + ' lap' + (rec.laps === 1 ? '' : 's');
+      summaryP.title = fullDescriptor;
+      info.appendChild(summaryP);
 
       const row = document.createElement('div');
       row.className = 'record-card-row';
@@ -61,13 +68,17 @@ export default class RecordsPanel {
       time.textContent = formatTime(rec.time);
       row.appendChild(time);
 
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'record-date';
       if (rec.date) {
-        const dateSpan = document.createElement('span');
-        dateSpan.className = 'record-date';
         const d = new Date(rec.date);
         dateSpan.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-        row.appendChild(dateSpan);
+      } else {
+        dateSpan.classList.add('record-date--empty');
+        dateSpan.textContent = '\u00a0';
+        dateSpan.setAttribute('aria-hidden', 'true');
       }
+      row.appendChild(dateSpan);
 
       const retryBtn = document.createElement('button');
       retryBtn.className = 'record-retry';

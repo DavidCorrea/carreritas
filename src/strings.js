@@ -13,12 +13,6 @@ export const strings = {
       speedPlaceholder: '0 km/h',
       controlsHint: 'W/\u2191 S/\u2193 A/\u2190 D/\u2192 \u00a0 SPACE Restart \u00a0 C Camera'
     },
-    accountBar: {
-      bestRuns: 'BEST RUNS',
-      carSettings: 'CAR SETTINGS',
-      login: 'LOGIN',
-      logout: 'LOGOUT'
-    },
     auth: {
       titleLogin: 'LOGIN',
       titleRegister: 'REGISTER',
@@ -40,7 +34,6 @@ export const strings = {
       ],
       tabCasual: 'CASUAL',
       tabLeaderboard: 'LEADERBOARD',
-      race: 'RACE',
       raceTypeSingle: 'SINGLE',
       raceTypeSeries: 'SERIES',
       trackCode: 'TRACK CODE',
@@ -64,7 +57,9 @@ export const strings = {
         'weekly-series': 'WEEKLY SERIES'
       },
       top10MenuBtn: 'TOP 10',
-      github: 'GitHub'
+      github: 'GitHub',
+      bestRuns: 'BEST RUNS',
+      carSettings: 'CAR SETTINGS'
     },
     results: {
       titleDefault: 'RACE COMPLETE',
@@ -275,7 +270,9 @@ export const strings = {
     shareStagesLine: (n, totalTime) => n + ' stages \u00b7 ' + totalTime,
     shareTimeLine: (t) => 'TIME  ' + t,
     shareLapLine: (n, t, star) => 'L' + n + '  ' + t + star,
-    starFastest: ' \u2605'
+    starFastest: ' \u2605',
+    betterLuckNextTime: 'Leaderboard: better luck next time.',
+    arcadeNamePrompt: 'Enter name for the leaderboard'
   },
 
   records: {
@@ -300,7 +297,9 @@ export const strings = {
   mobile: {
     tapRetry: 'Tap to retry',
     tapStart: 'Tap to start',
-    back: 'Back'
+    back: 'Back',
+    /** Shown instead of keyboard lines in the main menu on touch devices. */
+    menuOverlayHint: 'Left: steer · Right: gas / brake · Buttons: reset, camera, menu'
   },
 
   /** Countdown parts for `formatCountdown` in `utils/challenge-seed.js` (challenge reset timer). */
@@ -352,10 +351,8 @@ export function applyStaticDocumentCopy() {
   _setText('speed-display', d.hud.speedPlaceholder);
   _setText('controls-hint', d.hud.controlsHint);
 
-  _setText('records-btn', d.accountBar.bestRuns);
-  _setText('settings-btn', d.accountBar.carSettings);
-  _setText('login-btn', d.accountBar.login);
-  _setText('logout-btn', d.accountBar.logout);
+  _setText('records-btn', d.overlay.bestRuns);
+  _setText('settings-btn', d.overlay.carSettings);
 
   _setText('auth-title', d.auth.titleLogin);
   _setAttr('auth-username', 'placeholder', d.auth.usernamePlaceholder);
@@ -366,25 +363,24 @@ export function applyStaticDocumentCopy() {
 
   const h1 = document.querySelector('#overlay h1');
   if (h1) h1.textContent = d.overlay.title;
-  const subs = document.querySelectorAll('#overlay > p.subtitle');
+  const subs = document.querySelectorAll('#overlay .menu-hints .subtitle');
   for (let i = 0; i < subs.length && i < d.overlay.subtitles.length; i++) {
     subs[i].innerHTML = d.overlay.subtitles[i];
   }
 
   const tabBtns = document.querySelectorAll('#menu-tab-toggle .seg-option');
-  if (tabBtns[0]) tabBtns[0].textContent = d.overlay.tabCasual;
-  if (tabBtns[1]) tabBtns[1].textContent = d.overlay.tabLeaderboard;
+  if (tabBtns[0]) tabBtns[0].textContent = d.overlay.tabLeaderboard;
+  if (tabBtns[1]) tabBtns[1].textContent = d.overlay.tabCasual;
 
   const raceBtns = document.querySelectorAll('#race-type-toggle .seg-option');
   if (raceBtns[0]) raceBtns[0].textContent = d.overlay.raceTypeSingle;
   if (raceBtns[1]) raceBtns[1].textContent = d.overlay.raceTypeSeries;
 
-  const trackLabels = document.querySelectorAll('#event-tab .menu-card > .track-label');
+  const trackLabels = document.querySelectorAll('#event-tab .track-label');
   for (let i = 0; i < trackLabels.length; i++) {
     const el = trackLabels[i];
     const t = el.textContent.trim();
-    if (t === 'RACE') el.textContent = d.overlay.race;
-    else if (t === 'TRACK CODE') el.textContent = d.overlay.trackCode;
+    if (t === 'TRACK CODE') el.textContent = d.overlay.trackCode;
     else if (t === 'DIRECTION') el.textContent = d.overlay.direction;
     else if (t === 'MODE') el.textContent = d.overlay.mode;
     else if (t === 'STAGES') el.textContent = d.overlay.stages;

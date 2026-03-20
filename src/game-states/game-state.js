@@ -33,7 +33,6 @@ export class MenuState extends GameState {
     context.hud.hide();
     context.menu.hideTouchControls();
     context.menu.show();
-    context.accountBar.show();
   }
   onUpdate(dt, context) {
     if (!context.records.isOpen() && !context.settingsPanel.isOpen()) {
@@ -81,7 +80,6 @@ export class CountdownState extends GameState {
       context.cam.applyMode(context.player);
     }
     context.menu.hide();
-    context.accountBar.hide();
     context.currentRun.resetClocksForCountdown();
     context.hud.clearLapTimes();
     context.hud.show();

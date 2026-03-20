@@ -37,6 +37,7 @@ function buildFakeChallengeLeaderboardData(modeSlug, username, country) {
       if (r === rank) {
         entries.push({
           username: displayName,
+          display_name: displayName,
           country: userCountry,
           time_ms: t,
           recorded_at: new Date().toISOString()
@@ -45,6 +46,7 @@ function buildFakeChallengeLeaderboardData(modeSlug, username, country) {
         botIdx++;
         entries.push({
           username: 'BOT_' + String(botIdx).padStart(2, '0'),
+          display_name: 'BOT_' + String(botIdx).padStart(2, '0'),
           country: countryAt(r + botIdx),
           time_ms: t,
           recorded_at: new Date().toISOString()
@@ -58,6 +60,7 @@ function buildFakeChallengeLeaderboardData(modeSlug, username, country) {
   for (let i = 0; i < 10; i++) {
     entries.push({
       username: 'BOT_' + String(i + 1).padStart(2, '0'),
+      display_name: 'BOT_' + String(i + 1).padStart(2, '0'),
       country: countryAt(i),
       time_ms: baseTime(i),
       recorded_at: new Date().toISOString()
@@ -68,6 +71,7 @@ function buildFakeChallengeLeaderboardData(modeSlug, username, country) {
     total_count: 15,
     user_entry: {
       username: displayName,
+      display_name: displayName,
       country: userCountry,
       time_ms: baseTime(11),
       rank: 12

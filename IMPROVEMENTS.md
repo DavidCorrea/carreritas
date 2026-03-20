@@ -128,3 +128,24 @@ Ghost replays already use delta encoding, quantization (positions ×10, angles �
 
 **Where:** `src/game.js`, `src/ui/leaderboard-panel.js`, menu wiring
 **Why it matters:** Less noise in the orchestrator makes state transitions and track lifecycle easier to follow.
+
+## Manual QA — anonymous leaderboard (`/api/submit`, GET leaderboard/challenge)
+
+Run against a DB with migrations applied (`migrations/001_leaderboard_anonymous.sql`, `002_series_run_sequence.sql`).
+
+- **Default tab:** App opens on LEADERBOARD (challenges); CASUAL tab is available for offline play.
+- **CASUAL:** Finish a run — no name prompt, no network POST to submit; local bests/ghosts only.
+- **Daily race (single track):** Finish faster than 10th or on empty board — name prompt → submit → row in `best_times` with `display_name`; slower than top 10 — “Better luck next time”, no POST.
+- **GET** `/api/leaderboard?track_code=…&laps=…&reversed=…&night_mode=…` — returns up to 10 entries, `total_count`.
+- **Weekly/daily series:** Complete all stages — qualification + name → POST with `challenge_key` + `stages` array; GET `/api/challenge?challenge_key=ws:…` shows aggregated totals.
+- **Champion row:** #1 single-track submission stores `ghost_data` + `car_settings` when provided; trim removes extras beyond top 10.
+- **Auth hidden:** Login/logout controls not visible; session code paths remain for future use.
+
+**Automated:** `npm test` runs `api/self-test.js` (challenge seed helpers only, no DB).
+
+## Legacy `challenge_times` migration
+
+Historical rows were not backfilled into per-stage `best_times`; old table is dropped by migration. Restore only if you have a DB dump and a one-off script.
+
+**Where:** `migrations/001_leaderboard_anonymous.sql`
+**Why it matters:** Operators should not expect old series totals to appear automatically after deploy.

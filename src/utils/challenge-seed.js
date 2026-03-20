@@ -133,11 +133,10 @@ export function challengeConfigForMode(cm) {
   return null;
 }
 
-export function challengeStatsMessage(totalCount, userRank, isLoggedIn) {
+export function challengeStatsMessage(totalCount, userRank, _isLoggedIn) {
   const cs = strings.challengeStats;
   const taunts = strings.challengeTaunts;
   if (totalCount === 0) return pickRandom(cs.empty);
-  if (!isLoggedIn) return formatPlaceholders(pickRandom(cs.notLoggedIn), { n: totalCount });
   if (!userRank) return formatPlaceholders(pickRandom(cs.notParticipated), { n: totalCount });
   if (userRank === 1) return formatPlaceholders(pickRandom(cs.first), { n: totalCount });
   const ratio = userRank / totalCount;

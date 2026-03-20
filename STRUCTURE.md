@@ -2,9 +2,9 @@
 
 ## Root Files
 
-- `index.html` — shell markup: HUD, account bar, auth overlay, main menu overlay, panels (records, settings, results, leaderboard), touch controls. Links `/src/styles.css` for styling. Loads Three.js from CDN and `main.js` as the module entry point.
+- `index.html` — shell markup: HUD, auth overlay, main menu overlay, panels (records, settings, results, leaderboard), touch controls. Links `/src/styles.css` for styling. Loads Three.js from CDN and `main.js` as the module entry point.
 - `main.js` — entry: calls `applyStaticDocumentCopy()` from `src/strings.js`, then instantiates `Game` from `src/game.js`.
-- `schema.sql` — Postgres schema for users, car_settings, best_times, and challenge_times tables. Run manually against Neon (or a local Postgres with `USE_LOCAL_DB`) to set up the database.
+- `schema.sql` — Postgres schema for users, car_settings, and anonymous `best_times` (per-track rows, optional `series_run_id`; no `challenge_times`). Run manually against Neon (or a local Postgres with `USE_LOCAL_DB`) to set up the database. SQL migrations live under `migrations/`.
 - `package.json` — dependencies: Neon serverless driver, `pg` (local dev DB), bcryptjs, jsonwebtoken. Dev: Vite, ESLint. Scripts: `dev`, `dev:full` (Vercel dev), `build`, `preview`, `lint`, `lint:fix`.
 - `vite.config.js` — Vite configuration: `outDir: dist`, `assetsInlineLimit: 0`, `target: es2025`.
 - `eslint.config.mjs` — flat ESLint config for `main.js` and `src/**/*.js` (browser globals + `THREE`).
@@ -55,7 +55,7 @@ Client-side game code as ES modules.
 ### Data & HTTP
 
 - `storage.js` — `Storage`: sole module touching `localStorage` (car settings, auth blob, ghost encode/decode, best times).
-- `session.js` — `Session`, `GuestSession`, `UserSession`: load/save settings and bests (delegates to `Storage` and API when logged in).
+- `session.js` — `Session`, `GuestSession`, `UserSession`: load/save settings and bests via `Storage` only (no API ghost/best sync for challenges).
 - `auth.js` — `Auth`: JWT in memory + persistence via `Storage`.
 - `user.js` — `UserProfile`: username/country display via `Storage`.
 - `api.js` — `ApiClient`: HTTP helpers for auth, settings, times, leaderboard, challenges.
@@ -69,7 +69,7 @@ Client-side game code as ES modules.
 
 ### UI (`ui/`)
 
-Class-based overlays; constructors bind to DOM in `index.html`; `game.js` does not manipulate those DOM trees directly. Barrel `ui/index.js` exports: `Menu`, `Hud`, `ResultsScreen`, `ResultsPresenter`, `RecordsPanel`, `LeaderboardPanel`, `AuthPanel`, `AccountBar`, `SettingsPanel`.
+Class-based overlays; constructors bind to DOM in `index.html`; `game.js` does not manipulate those DOM trees directly. Barrel `ui/index.js` exports: `Menu`, `Hud`, `ResultsScreen`, `ResultsPresenter`, `RecordsPanel`, `LeaderboardPanel`, `AuthPanel`, `SettingsPanel`.
 
 - `menu.js` — main overlay: event vs challenges tabs, track code, laps, direction, mode, single vs series, stage list, challenge previews.
 - `hud.js` — racing HUD, countdown lights, camera label.
@@ -89,9 +89,11 @@ Vercel Serverless Functions. Each `.js` file becomes `/api/<name>`. Files prefix
 - `register.js` — POST: create user (username, bcrypt password, country).
 - `login.js` — POST: credentials → JWT.
 - `settings.js` — GET/PUT: car settings for authenticated user.
-- `times.js` — GET/POST: best times for authenticated user.
-- `leaderboard.js` — GET: top **10** entries for a track descriptor (+ total count; optional `user_entry` when logged in but outside top 10). Public.
-- `challenge.js` — GET: top **10** challenge times by challenge key. POST: save series challenge time (authenticated).
+- `times.js` — legacy stub: GET empty; POST returns 410 (use `/api/submit` for challenge times).
+- `leaderboard.js` — GET: top **10** for a track descriptor (`display_name`, `username` alias); champion `ghost_data` / `car_settings` on #1 only.
+- `challenge.js` — GET: series aggregate leaderboard from `best_times` by challenge key; no POST (submissions via `/api/submit`).
+- `submit.js` — POST: anonymous single-track or series batch (`display_name`, top-10 trim, shared `series_run_id` for series stages).
+- `_challenge-seed.js`, `_leaderboardDb.js` — shared helpers for challenge parsing and DB trim.
 
 ## Conventions
 
@@ -100,4 +102,4 @@ Vercel Serverless Functions. Each `.js` file becomes `/api/<name>`. Files prefix
 - Shared Three.js geometries/materials use `_shared = true` where applicable to avoid accidental disposal.
 - Vite bundles the app with content-hashed filenames; Three.js remains a global from a CDN script tag before `main.js`.
 - API handlers use CommonJS (`require`/`module.exports`) for Vercel serverless.
-- Best times are always written to localStorage; the API syncs times for **challenge** leaderboards (daily/weekly races and series totals) when logged in; ad-hoc track bests stay client-only unless covered by challenge flows. Car settings sync via the API when logged in.
+- Personal bests and ghosts stay in `localStorage` for everyone; **official challenge** runs (LEADERBOARD tab) can POST to `/api/submit` with a display name. CASUAL / custom tracks never hit the leaderboard API. Car settings still sync via `/api/settings` when logged in.

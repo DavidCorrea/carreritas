@@ -1,5 +1,52 @@
 const { getDb } = require('./_db');
 const { verifyToken, sendJson } = require('./_auth');
+const { seriesStagesForChallengeKey } = require('./_challenge-seed');
+
+/**
+ * Build series leaderboard from best_times rows (same logic as trimSeriesRuns in submit.js).
+ */
+function buildSeriesTotals(rows, stages) {
+  const n = stages.length;
+  const byRun = new Map();
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const id = row.series_run_id;
+    if (id == null) continue;
+    if (!byRun.has(id)) byRun.set(id, []);
+    byRun.get(id).push(row);
+  }
+
+  const totals = [];
+  byRun.forEach(function (list, seriesRunId) {
+    if (list.length !== n) return;
+    const byKey = new Map();
+    let displayName = null;
+    let recordedAt = null;
+    for (let j = 0; j < list.length; j++) {
+      const row = list[j];
+      displayName = row.display_name;
+      if (!recordedAt || row.recorded_at > recordedAt) recordedAt = row.recorded_at;
+      const key = row.track_code + '|' + row.laps + '|' + row.reversed + '|' + row.night_mode;
+      byKey.set(key, row.time_ms);
+    }
+    let sum = 0;
+    for (let k = 0; k < stages.length; k++) {
+      const s = stages[k];
+      const key = s.code + '|' + s.laps + '|' + s.reversed + '|' + s.night_mode;
+      if (!byKey.has(key)) return;
+      sum += byKey.get(key);
+    }
+    totals.push({
+      series_run_id: seriesRunId,
+      time_ms: sum,
+      display_name: displayName,
+      recorded_at: recordedAt
+    });
+  });
+
+  totals.sort(function (a, b) { return a.time_ms - b.time_ms; });
+  return totals;
+}
 
 module.exports = async function (req, res) {
   const sql = getDb();
@@ -8,54 +55,70 @@ module.exports = async function (req, res) {
     const key = (req.query || {}).challenge_key;
     if (!key) return sendJson(res, 400, { error: 'challenge_key required' });
 
-    const [rows, countRows] = await Promise.all([
-      sql('SELECT u.username, u.country, c.time_ms, c.recorded_at FROM challenge_times c JOIN users u ON u.id = c.user_id WHERE c.challenge_key = $1 ORDER BY c.time_ms LIMIT 10',
-        [key]),
-      sql('SELECT COUNT(*)::int AS total FROM challenge_times WHERE challenge_key = $1',
-        [key])
-    ]);
+    const stages = seriesStagesForChallengeKey(key);
+    if (!stages || stages.length === 0) {
+      return sendJson(res, 400, { error: 'invalid or non-series challenge_key' });
+    }
 
-    const result = { entries: rows, total_count: countRows[0].total };
+    const params = [];
+    const orParts = [];
+    let p = 1;
+    for (let i = 0; i < stages.length; i++) {
+      const s = stages[i];
+      orParts.push('(track_code = $' + p + ' AND laps = $' + (p + 1) + ' AND reversed = $' + (p + 2) + ' AND night_mode = $' + (p + 3) + ')');
+      params.push(s.code, s.laps, s.reversed, s.night_mode);
+      p += 4;
+    }
+
+    const rows = await sql(
+      `SELECT series_run_id, time_ms, track_code, laps, reversed, night_mode, display_name, recorded_at
+       FROM best_times
+       WHERE series_run_id IS NOT NULL AND (${orParts.join(' OR ')})`,
+      params
+    );
+
+    const allTotals = buildSeriesTotals(rows, stages);
+    const top = allTotals.slice(0, 10);
+    const entries = top.map(function (t) {
+      return {
+        display_name: t.display_name,
+        username: t.display_name,
+        time_ms: t.time_ms,
+        recorded_at: t.recorded_at,
+        country: null
+      };
+    });
+
+    const result = { entries, total_count: allTotals.length };
 
     const user = verifyToken(req);
-    if (user) {
-      const inTop = rows.some(function (r) { return r.username === user.username; });
+    if (user && allTotals.length > 0) {
+      const inTop = top.some(function (r) { return r.display_name === user.username; });
       if (!inTop) {
-        const userRows = await sql(
-          'SELECT c.time_ms, u.country, (SELECT COUNT(*) FROM challenge_times c2 WHERE c2.challenge_key = $2 AND c2.time_ms < c.time_ms) + 1 AS rank FROM challenge_times c JOIN users u ON u.id = c.user_id WHERE c.user_id = $1 AND c.challenge_key = $2',
-          [user.id, key]
-        );
-        if (userRows.length > 0) {
-          result.user_entry = { username: user.username, country: userRows[0].country, time_ms: userRows[0].time_ms, rank: parseInt(userRows[0].rank) };
+        let rank = null;
+        let timeMs = null;
+        for (let i = 0; i < allTotals.length; i++) {
+          if (allTotals[i].display_name === user.username) {
+            rank = i + 1;
+            timeMs = allTotals[i].time_ms;
+            break;
+          }
+        }
+        if (rank != null) {
+          result.user_entry = {
+            username: user.username,
+            display_name: user.username,
+            country: null,
+            time_ms: timeMs,
+            rank
+          };
         }
       }
     }
 
     sendJson(res, 200, result);
-
-  } else if (req.method === 'POST') {
-    const poster = verifyToken(req);
-    if (!poster) return sendJson(res, 401, { error: 'Unauthorized' });
-
-    const b = req.body || {};
-    if (!b.challenge_key || !b.time_ms) return sendJson(res, 400, { error: 'Missing fields' });
-
-    const existing = await sql(
-      'SELECT time_ms FROM challenge_times WHERE user_id = $1 AND challenge_key = $2',
-      [poster.id, b.challenge_key]
-    );
-
-    if (existing.length > 0 && existing[0].time_ms <= b.time_ms) {
-      return sendJson(res, 200, { ok: true, updated: false });
-    }
-
-    await sql(
-      'INSERT INTO challenge_times (user_id, challenge_key, time_ms) VALUES ($1, $2, $3) ON CONFLICT (user_id, challenge_key) DO UPDATE SET time_ms = $3, recorded_at = now()',
-      [poster.id, b.challenge_key, b.time_ms]
-    );
-    sendJson(res, 200, { ok: true, updated: true });
-
-  } else {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
   }
+
+  sendJson(res, 405, { error: 'Method not allowed' });
 };

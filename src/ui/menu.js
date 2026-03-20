@@ -112,6 +112,17 @@ export default class Menu {
       this._eventTab.style.display = 'none';
       this._challengesTab.style.display = '';
     }
+    const ep = document.getElementById('event-start-prompt');
+    const cp = document.getElementById('challenge-start-prompt');
+    if (ep && cp) {
+      if (name === 'event') {
+        ep.style.display = '';
+        cp.style.display = 'none';
+      } else {
+        ep.style.display = 'none';
+        cp.style.display = '';
+      }
+    }
   }
 
   stopChallengeCountdown() {
