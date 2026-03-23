@@ -32,7 +32,8 @@ const Constants = {
 
   track: {
     width: 55,
-    samples: 400,
+    /** Spine samples: lower = less mesh/collision work; QA tight bends if reduced. */
+    samples: 320,
     recordInterval: 0.1
   },
 

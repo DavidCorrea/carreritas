@@ -242,7 +242,15 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+  <!-- Backquote (`) toggles visibility; fixed overlay — see .perf-meter in styles.css -->
+  <div id="perf-meter" class="perf-meter perf-meter--hidden" aria-hidden="true" title="Backquote (`) toggles this panel">
+    <div class="perf-meter__title">PERF</div>
+    <div class="perf-meter__row"><span class="perf-meter__label">FPS</span><span id="perf-fps">—</span></div>
+    <div class="perf-meter__row"><span class="perf-meter__label">ms</span><span id="perf-ms">—</span></div>
+    <div class="perf-meter__row"><span class="perf-meter__label">CPU</span><span id="perf-cpu">—</span></div>
+    <div class="perf-meter__row"><span class="perf-meter__label">GPU</span><span id="perf-gpu">—</span></div>
+  </div>
+
   <script type="module" src="/main.js"></script>
   <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
   <script defer src="/_vercel/insights/script.js"></script>

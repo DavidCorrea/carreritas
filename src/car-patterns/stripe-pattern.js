@@ -7,14 +7,9 @@ export default class StripePattern extends CarPattern {
   }
 
   createMesh(group, opts) {
-    const transparent = opts.opacity < 1;
-    const matOpts = { transparent, opacity: opts.opacity };
-    const primary = opts.color;
-    const secondary = opts.secondaryColor || primary;
-
     const disc = new THREE.Mesh(
       sharedGeom.disc,
-      new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      opts.primaryMat
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = 2;
@@ -23,7 +18,7 @@ export default class StripePattern extends CarPattern {
 
     const stripe = new THREE.Mesh(
       sharedGeom.stripe,
-      new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+      opts.secondaryMat
     );
     stripe.rotation.x = -Math.PI / 2;
     stripe.position.y = 2.15;

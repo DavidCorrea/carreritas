@@ -7,16 +7,11 @@ export default class SpiralPattern extends CarPattern {
   }
 
   createMesh(group, opts) {
-    const transparent = opts.opacity < 1;
-    const matOpts = { transparent, opacity: opts.opacity };
-    const primary = opts.color;
-    const secondary = opts.secondaryColor || primary;
-
     for (let si = 0; si < 6; si++) {
-      const sliceColor = si % 2 === 0 ? primary : secondary;
+      const mat = si % 2 === 0 ? opts.primaryMat : opts.secondaryMat;
       const slice = new THREE.Mesh(
         sharedGeom['spiral' + si],
-        new THREE.MeshLambertMaterial(Object.assign({ color: sliceColor }, matOpts))
+        mat
       );
       slice.rotation.x = -Math.PI / 2;
       slice.position.y = 2;

@@ -7,14 +7,9 @@ export default class HalfPattern extends CarPattern {
   }
 
   createMesh(group, opts) {
-    const transparent = opts.opacity < 1;
-    const matOpts = { transparent, opacity: opts.opacity };
-    const primary = opts.color;
-    const secondary = opts.secondaryColor || primary;
-
     const halfA = new THREE.Mesh(
       sharedGeom.halfA,
-      new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      opts.primaryMat
     );
     halfA.rotation.x = -Math.PI / 2;
     halfA.position.y = 2;
@@ -23,7 +18,7 @@ export default class HalfPattern extends CarPattern {
 
     const halfB = new THREE.Mesh(
       sharedGeom.halfB,
-      new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+      opts.secondaryMat
     );
     halfB.rotation.x = -Math.PI / 2;
     halfB.position.y = 2;

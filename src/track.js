@@ -46,6 +46,7 @@ export default class Track {
     this._buildWalls(this.inner, this.outer, trackGroup);
     this._buildStartLine(this.curve, trackGroup);
 
+    // InstancedMesh frustum bounds do not reliably wrap all instances — culling causes visible flicker.
     trackGroup.traverse(function (child) {
       child.matrixAutoUpdate = false;
       child.frustumCulled = false;
@@ -69,7 +70,7 @@ export default class Track {
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
     geom.setIndex(idx);
-    trackGroup.add(new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ color: 0x444444 })));
+    trackGroup.add(new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: 0x444444 })));
   }
 
   _buildWalls(inner, outer, trackGroup) {

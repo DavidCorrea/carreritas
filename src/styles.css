@@ -1472,3 +1472,45 @@ body.mobile .touch-action-buttons {
     right: max(0.75rem, env(safe-area-inset-right, 0px)) !important;
   }
 }
+
+/* Dev overlay: fixed to viewport; Backquote (`) toggles */
+.perf-meter {
+  position: fixed;
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  min-width: 9.5rem;
+  padding: 0.35rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: #c8e6c9;
+  background: rgba(0, 12, 6, 0.78);
+  border: 1px solid rgba(100, 180, 120, 0.35);
+  border-radius: 4px;
+  pointer-events: none;
+  text-align: right;
+  -webkit-font-smoothing: antialiased;
+}
+
+.perf-meter--hidden {
+  display: none;
+}
+
+.perf-meter__title {
+  font-size: 0.5625rem;
+  letter-spacing: 0.12em;
+  color: rgba(160, 210, 170, 0.75);
+  margin-bottom: 0.2rem;
+  text-align: left;
+}
+
+.perf-meter__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.perf-meter__label {
+  color: rgba(140, 190, 155, 0.85);
+}

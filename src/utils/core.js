@@ -18,12 +18,23 @@ export function intToHex(n) {
 export function disposeMesh(mesh) {
   if (mesh.isInstancedMesh) mesh.dispose();
   if (mesh.geometry && !mesh.geometry._shared) mesh.geometry.dispose();
-  if (mesh.material && !mesh.material._shared) mesh.material.dispose();
+  const m = mesh.material;
+  if (m && !m._shared && !m._sharedCarPalette) m.dispose();
 }
 
+/** Collect shared palette materials once — multiple meshes may reference the same material. */
 export function disposeGroup(group) {
+  const sharedPalette = new Set();
+  group.traverse(function (child) {
+    if (child.isMesh && child.material && child.material._sharedCarPalette) {
+      sharedPalette.add(child.material);
+    }
+  });
   group.traverse(function (child) {
     if (child.isMesh) disposeMesh(child);
+  });
+  sharedPalette.forEach(function (m) {
+    m.dispose();
   });
 }
 

@@ -24,7 +24,7 @@ export default class Ghost {
         child.material = new THREE.MeshBasicMaterial({
           color: m.color, transparent: m.transparent, opacity: m.opacity
         });
-        m.dispose();
+        if (!m._sharedCarPalette) m.dispose();
       }
     });
     this.mesh.visible = false;

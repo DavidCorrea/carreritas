@@ -54,7 +54,7 @@ function fogDensityForCamera(cameraModeIndex) {
 }
 
 function createBeamMesh(length, halfAngle, rgb) {
-  const segments = 16;
+  const segments = 10;
   const positions = [0, 0.02, 0];
   const colors = [rgb.r, rgb.g, rgb.b];
   const indices = [];
@@ -86,7 +86,7 @@ function createBeamMesh(length, halfAngle, rgb) {
 }
 
 function createGlowMesh(radius, r, g, b) {
-  const segments = 24;
+  const segments = 16;
   const positions = [0, 0.02, 0];
   const colors = [r, g, b];
   const indices = [];

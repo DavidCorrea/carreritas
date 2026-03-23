@@ -8,14 +8,9 @@ export default class DotsPattern extends CarPattern {
   }
 
   createMesh(group, opts) {
-    const transparent = opts.opacity < 1;
-    const matOpts = { transparent, opacity: opts.opacity };
-    const primary = opts.color;
-    const secondary = opts.secondaryColor || primary;
-
     const dotsDisc = new THREE.Mesh(
       sharedGeom.disc,
-      new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      opts.primaryMat
     );
     dotsDisc.rotation.x = -Math.PI / 2;
     dotsDisc.position.y = 2;
@@ -28,7 +23,7 @@ export default class DotsPattern extends CarPattern {
       const da = dotAngles[di];
       const dMesh = new THREE.Mesh(
         sharedGeom.dotsDot,
-        new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+        opts.secondaryMat
       );
       dMesh.rotation.x = -Math.PI / 2;
       dMesh.position.set(Math.sin(da) * dotDist, 2.15, Math.cos(da) * dotDist);

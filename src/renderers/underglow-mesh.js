@@ -1,7 +1,7 @@
 import Constants from '../constants.js';
 import { hexToInt, hexToRgb } from '../utils/index.js';
 
-const UNDERGLOW_SEGMENTS = 40;
+const UNDERGLOW_SEGMENTS = 28;
 
 const GROUND_DECAL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
 
@@ -12,7 +12,7 @@ export function createUnderglowMesh(color, underglowOpacity) {
   const fade = underglowOpacity / 100;
 
   const inner = new THREE.Mesh(
-    new THREE.CircleGeometry(Constants.car.radius * 1.05, UNDERGLOW_SEGMENTS),
+    new THREE.CircleGeometry(Constants.car.radius * 1.05, 20),
     new THREE.MeshBasicMaterial(Object.assign({
       color: colorInt, transparent: true, opacity: 0.45 * fade, depthWrite: false
     }, GROUND_DECAL_OFFSET))

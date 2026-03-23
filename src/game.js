@@ -1,4 +1,10 @@
 import Constants from './constants.js';
+import {
+  initialGpuTierIndex,
+  GPU_TIER_PIXEL_RATIOS,
+  preferWebglAntialias,
+  stepGpuTier
+} from './gpu-tier.js';
 import { fakeChallengeLeaderboardData } from './fake-leaderboard.js';
 import Storage, { normalizeCarPatternInSettings } from './storage.js';
 import { GuestSession, UserSession } from './session.js';
@@ -86,15 +92,23 @@ export default class Game {
     this.renderChallengePreview();
     this._bindResize();
     this._bindPersistGuards();
+    this._initPerfMeter();
     requestAnimationFrame((t) => this.gameLoop(t));
   }
 
   gameLoop(time) {
     requestAnimationFrame((t) => this.gameLoop(t));
     const dt = this._nextFrameDelta(time);
+    const tCpu0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    if (stepGpuTier(this._gpuTierState, dt)) {
+      this._applyGpuPixelRatio();
+      this.sceneDirty = true;
+    }
     this.stateMachine.update(dt, this);
     this._runFrameUpdates(dt);
-    this._presentIfDirty();
+    const cpuWorkMs = typeof performance !== 'undefined' ? performance.now() - tCpu0 : 0;
+    const rendered = this._presentIfDirty();
+    this._tickPerfMeter(dt, rendered, cpuWorkMs);
   }
 
   updatePreviewDrive(dt) {
@@ -280,6 +294,17 @@ export default class Game {
 
   // --- Track shape, descriptors, challenge context ---
 
+  _compileScene() {
+    if (!this.renderer || !this.scene || !this.cam || !this.cam.active) return;
+    this.renderer.compile(this.scene, this.cam.active);
+  }
+
+  _applyGpuPixelRatio() {
+    if (!this.renderer) return;
+    const cap = GPU_TIER_PIXEL_RATIOS[this._gpuTierState.tierIndex];
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+  }
+
   rebuildTrack(code, { resetMenuPreview = true } = {}) {
     if (this.player) { disposeGroup(this.player.mesh); this.scene.remove(this.player.mesh); this.player = null; }
     this.ghost.dispose(this.scene);
@@ -298,6 +323,7 @@ export default class Game {
       this.menuPreviewActive = false;
     }
     this.sceneDirty = true;
+    this._compileScene();
   }
 
   /** Direction, day/night, and laps from a parsed descriptor; updates menu + renderer when relevant. */
@@ -875,6 +901,7 @@ export default class Game {
       this.cam.showcaseShotIndex = showcaseShotIndex;
       this.cam.showcaseActive = true;
     }
+    this._compileScene();
   }
 
   switchPreviewToNight() {
@@ -1047,9 +1074,14 @@ export default class Game {
     this.cam = new Camera(orthoCamera, perspCamera);
     this.hud.setCameraLabel(this._displayCameraName(this.cam.getCurrentModeName()));
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this._gpuTierState = {
+      tierIndex: initialGpuTierIndex(),
+      frameTimeEma: 0.016,
+      cooldown: 1.5
+    };
+    this.renderer = new THREE.WebGLRenderer({ antialias: preferWebglAntialias(), powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this._applyGpuPixelRatio();
     if (THREE.SRGBColorSpace !== undefined) {
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     } else if (THREE.sRGBEncoding !== undefined) {
@@ -1066,7 +1098,7 @@ export default class Game {
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(2000, 2000),
-      new THREE.MeshLambertMaterial({ color: 0x5d8a4a })
+      new THREE.MeshBasicMaterial({ color: 0x5d8a4a })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.matrixAutoUpdate = false;
@@ -1144,6 +1176,7 @@ export default class Game {
     window.addEventListener('resize', () => {
       this.cam.handleResize(this.player);
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this._applyGpuPixelRatio();
       this.sceneDirty = true;
     });
   }
@@ -1170,6 +1203,12 @@ export default class Game {
   _bindKeyboardAndTouch() {
     this.input = new Input(this.renderer.domElement, {
       onKeyDown: (e) => {
+        if (e.code === 'Backquote' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          this._togglePerfMeter();
+          return;
+        }
+
         if (e.code === 'Enter') {
           e.preventDefault();
           const enterHandler = this.inputContext.getActiveHandler('EnterKey');
@@ -1547,7 +1586,6 @@ export default class Game {
   _runFrameUpdates(dt) {
     this._tickSettingsPreviewDrive(dt);
     this._syncCameraToFrame(dt);
-    this._tickSceneRenderer();
   }
 
   _tickSettingsPreviewDrive(dt) {
@@ -1581,15 +1619,76 @@ export default class Game {
     this.cam.update(this.player, dt);
   }
 
-  _tickSceneRenderer() {
-    if (!this.sceneRenderer) return;
-    this.sceneRenderer.update(this.player, this.carSettings.underglowOpacity, this.cam.getModeIndex());
-  }
-
   _presentIfDirty() {
-    if (!this.sceneDirty) return;
+    if (!this.sceneDirty) return false;
+    if (this.sceneRenderer) {
+      this.sceneRenderer.update(this.player, this.carSettings.underglowOpacity, this.cam.getModeIndex());
+    }
     this.renderer.render(this.scene, this.cam.active);
     this.sceneDirty = false;
+    return true;
+  }
+
+  _initPerfMeter() {
+    this._perfMeterVisible = false;
+    this._perfMeterEl = document.getElementById('perf-meter');
+    this._perfEls = this._perfMeterEl
+      ? {
+          fps: document.getElementById('perf-fps'),
+          ms: document.getElementById('perf-ms'),
+          cpu: document.getElementById('perf-cpu'),
+          gpu: document.getElementById('perf-gpu')
+        }
+      : null;
+    if (!this._perfEls || !this._perfEls.fps) return;
+    this._perfFpsEma = 60;
+    this._perfMsEma = 16.7;
+    this._perfCpuEma = 0;
+    this._perfLastCalls = 0;
+    this._perfLastTris = 0;
+    try {
+      if (localStorage.getItem('carreritas_perf_meter') === '1') {
+        this._setPerfMeterVisible(true);
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+  }
+
+  _setPerfMeterVisible(visible) {
+    this._perfMeterVisible = visible;
+    if (!this._perfMeterEl) return;
+    this._perfMeterEl.classList.toggle('perf-meter--hidden', !visible);
+    this._perfMeterEl.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    try {
+      localStorage.setItem('carreritas_perf_meter', visible ? '1' : '0');
+    } catch (_e) {
+      /* ignore */
+    }
+  }
+
+  _togglePerfMeter() {
+    this._setPerfMeterVisible(!this._perfMeterVisible);
+  }
+
+  _tickPerfMeter(dt, rendered, cpuWorkMs) {
+    if (!this._perfEls || !this._perfEls.fps) return;
+    const a = 0.08;
+    this._perfFpsEma = this._perfFpsEma * (1 - a) + (1 / Math.max(dt, 1e-6)) * a;
+    this._perfMsEma = this._perfMsEma * (1 - a) + dt * 1000 * a;
+    this._perfCpuEma = this._perfCpuEma * (1 - a) + cpuWorkMs * a;
+    if (rendered && this.renderer) {
+      const r = this.renderer.info.render;
+      this._perfLastCalls = r.calls;
+      this._perfLastTris = r.triangles;
+    }
+    if (!this._perfMeterVisible) return;
+    this._perfEls.fps.textContent = this._perfFpsEma.toFixed(0);
+    this._perfEls.ms.textContent = this._perfMsEma.toFixed(1);
+    this._perfEls.cpu.textContent = this._perfCpuEma.toFixed(1);
+    const tris = this._perfLastTris;
+    const trisStr = tris >= 1000 ? (tris / 1000).toFixed(1) + 'k' : String(tris);
+    this._perfEls.gpu.textContent = `${this._perfLastCalls} · ${trisStr}`;
   }
 
 }

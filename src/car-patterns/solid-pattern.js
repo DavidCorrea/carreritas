@@ -7,10 +7,9 @@ export default class SolidPattern extends CarPattern {
   }
 
   createMesh(group, opts) {
-    const matOpts = { transparent: opts.opacity < 1, opacity: opts.opacity };
     const disc = new THREE.Mesh(
       sharedGeom.disc,
-      new THREE.MeshLambertMaterial(Object.assign({ color: opts.color }, matOpts))
+      opts.primaryMat
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = 2;

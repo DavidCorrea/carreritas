@@ -7,14 +7,9 @@ export default class BullseyePattern extends CarPattern {
   }
 
   createMesh(group, opts) {
-    const transparent = opts.opacity < 1;
-    const matOpts = { transparent, opacity: opts.opacity };
-    const primary = opts.color;
-    const secondary = opts.secondaryColor || primary;
-
     const beDisc = new THREE.Mesh(
       sharedGeom.disc,
-      new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      opts.primaryMat
     );
     beDisc.rotation.x = -Math.PI / 2;
     beDisc.position.y = 2;
@@ -23,7 +18,7 @@ export default class BullseyePattern extends CarPattern {
 
     const beRing = new THREE.Mesh(
       sharedGeom.bullseyeMid,
-      new THREE.MeshLambertMaterial(Object.assign({ color: secondary }, matOpts))
+      opts.secondaryMat
     );
     beRing.rotation.x = -Math.PI / 2;
     beRing.position.y = 2.1;
@@ -32,7 +27,7 @@ export default class BullseyePattern extends CarPattern {
 
     const beCenter = new THREE.Mesh(
       sharedGeom.bullseyeCenter,
-      new THREE.MeshLambertMaterial(Object.assign({ color: primary }, matOpts))
+      opts.primaryMat
     );
     beCenter.rotation.x = -Math.PI / 2;
     beCenter.position.y = 2.15;
