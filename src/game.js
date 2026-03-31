@@ -5,13 +5,13 @@ import {
   preferWebglAntialias,
   stepGpuTier
 } from './gpu-tier.js';
-import { fakeChallengeLeaderboardData } from './fake-leaderboard.js';
-import Storage, { normalizeCarPatternInSettings } from './storage.js';
-import { GuestSession, UserSession } from './session.js';
+import Storage from './storage.js';
+import { GuestSession } from './session.js';
 import {
   hexToInt, disposeGroup, countryFlag, isMobile,
   formatDescriptor,
   parseDescriptor,
+  decodeTrackShareToken,
   randomTrackCode,
   challengeLabel,
   challengeKey,
@@ -22,8 +22,9 @@ import {
   formatCountdown,
   utcDateStr,
   utcMondayStr,
-  challengeStatsMessage,
-  dailySeriesConfig
+  dailySeriesConfig,
+  pickRandom,
+  provisionalLeaderboardRank
 } from './utils/index.js';
 import ApiClient from './api.js';
 import Track from './track.js';
@@ -34,16 +35,18 @@ import Ghost from './ghost.js';
 import Camera from './camera.js';
 import { DayRenderer, NightRenderer } from './renderers/index.js';
 import Input from './input.js';
-import Auth from './auth.js';
-import UserProfile from './user.js';
-import { Menu, Hud, ResultsScreen, ResultsPresenter, RecordsPanel, LeaderboardPanel, AuthPanel, SettingsPanel } from './ui/index.js';
+import {
+  Menu, Hud, ResultsScreen, ResultsPresenter, RecordsPanel, LeaderboardPanel, SettingsPanel,
+  ChallengeQualifyScreen
+} from './ui/index.js';
 import { FwdDirection, Direction } from './directions/index.js';
 import { DayMode, NightMode, Mode } from './modes/index.js';
 import { ChallengeMode } from './challenge-modes/index.js';
 import RunContext from './run-context/index.js';
 import Race from './race.js';
 import { StateMachine, MenuState, CountdownState, RacingState, FinishedState, InputContext } from './game-states/index.js';
-import { strings } from './strings.js';
+import { strings, formatPlaceholders } from './strings.js';
+import { attachDevScreenApi } from './dev-screen-preview.js';
 const _previewPt = new THREE.Vector3();
 const _previewTan = new THREE.Vector3();
 
@@ -52,21 +55,21 @@ const SAVE_SETTINGS_DEBOUNCE_MS = 350;
 
 /**
  * Fullscreen modals: blur the WebGL layer (backdrop-filter does not sample canvas reliably).
- * Car settings (#settings) is excluded: the menu is hidden while it is open and the scene must stay sharp.
+ * Car settings panel is excluded: the menu is hidden while it is open and the scene must stay sharp.
  */
 function _isAnyModalOpenForBackdrop() {
-  const overlay = document.getElementById('overlay');
-  const results = document.getElementById('results');
-  const leaderboard = document.getElementById('leaderboard');
-  const records = document.getElementById('records');
-  const auth = document.getElementById('auth');
-  if (!overlay || !results || !leaderboard || !records || !auth) return false;
+  const overlay = document.querySelector('.menu-overlay');
+  const results = document.querySelector('.race-results');
+  const leaderboard = document.querySelector('.race-leaderboard');
+  const records = document.querySelector('.race-records');
+  const challengeQualify = document.querySelector('.challenge-qualify');
+  if (!overlay || !results || !leaderboard || !records) return false;
   return (
     !overlay.classList.contains('hidden') ||
     results.style.display === 'flex' ||
+    (challengeQualify && challengeQualify.style.display === 'flex') ||
     leaderboard.style.display === 'flex' ||
-    !records.classList.contains('hidden') ||
-    auth.classList.contains('visible')
+    !records.classList.contains('hidden')
   );
 }
 
@@ -74,14 +77,13 @@ export default class Game {
   constructor() {
     this._initRaceAndPreviewState();
     this._initRenderingSlots();
-    this._initAuthUiAndSession();
+    this._initPanelsAndSession();
     this.init();
   }
 
   // --- Bootstrap & main loop ---
 
   init() {
-    this._bootstrapSessionUi();
     if (this.mobile) this._configureMobileShell();
     this._createThreeBootstrap();
     const { startCode, openedSeriesFromUrl } = this._consumeShareUrlParams();
@@ -92,7 +94,8 @@ export default class Game {
     this.renderChallengePreview();
     this._bindResize();
     this._bindPersistGuards();
-    this._initPerfMeter();
+    this._initDevTools();
+    attachDevScreenApi(this);
     requestAnimationFrame((t) => this.gameLoop(t));
   }
 
@@ -108,7 +111,7 @@ export default class Game {
     this._runFrameUpdates(dt);
     const cpuWorkMs = typeof performance !== 'undefined' ? performance.now() - tCpu0 : 0;
     const rendered = this._presentIfDirty();
-    this._tickPerfMeter(dt, rendered, cpuWorkMs);
+    this._tickDevTools(dt, rendered, cpuWorkMs);
   }
 
   updatePreviewDrive(dt) {
@@ -122,7 +125,7 @@ export default class Game {
     this.player.setWorldPose(_previewPt.x, _previewPt.z, angle);
   }
 
-  // --- Best times, settings sync, auth ---
+  // --- Best times, settings ---
 
   loadBest(code, callback) {
     this.bestReplay = null;
@@ -186,58 +189,6 @@ export default class Game {
     if (this.sceneRenderer) this.sceneRenderer.updateColors(this.carSettings);
   }
 
-  loadAuth() {
-    if (this.authManager.loadAuth()) {
-      this.userProfile.load();
-      this.session = this.userSession;
-    }
-  }
-
-  uploadLocalData() {
-    this.apiClient.updateSettings(this.carSettings).catch(function () {});
-  }
-
-  hideAuthPanel() {
-    this.auth.hide();
-    this.inputContext.clear(this.auth);
-  }
-
-  async handleAuthSubmit(e) {
-    e.preventDefault();
-    const creds = this.auth.getCredentials();
-    if (!creds.username || !creds.password) { this.auth.setError(strings.auth.fillFields); return; }
-    if (creds.isRegister && !creds.country) { this.auth.setError(strings.auth.selectCountry); return; }
-
-    this.auth.setSubmitting(true);
-    this.auth.clearError();
-
-    try {
-      const data = creds.isRegister
-        ? await this.apiClient.register(creds.username, creds.password, creds.country)
-        : await this.apiClient.login(creds.username, creds.password);
-      this.auth.setSubmitting(false);
-      if (data.error) { this.auth.setError(data.error); return; }
-      this.authManager.persistAuth(data.token);
-      this.userProfile.save(data.username, data.country);
-      this.session = this.userSession;
-      this.hideAuthPanel();
-      this.uploadLocalData();
-      if (!creds.isRegister) {
-        this.session.loadSettings((remote) => {
-          for (const k in Constants.car.defaultSettings) {
-            if (remote[k] !== undefined) this.carSettings[k] = remote[k];
-          }
-          normalizeCarPatternInSettings(this.carSettings);
-          Storage.shared.saveCarSettings(this.carSettings);
-          this.applyCarSettings();
-        });
-      }
-    } catch {
-      this.auth.setSubmitting(false);
-      this.auth.setError(strings.auth.connectionError);
-    }
-  }
-
   // --- Leaderboard ---
 
   showLeaderboardForChallenge(modeOrStr) {
@@ -252,7 +203,7 @@ export default class Game {
     void (async () => {
       let data;
       if (Constants.fakeChallengeLeaderboards) {
-        data = await fakeChallengeLeaderboardData(cm.slug(), this.userProfile.getUsername(), this.userProfile.getCountry());
+        data = { entries: [], total_count: 0 };
       } else if (cm.isSeries()) {
         data = await this.apiClient.fetchChallengeLeaderboard(key);
       } else {
@@ -283,13 +234,13 @@ export default class Game {
   hideLeaderboardPanel() {
     this.leaderboard.hide();
     this.inputContext.clear(this.leaderboard);
-    if (this.leaderboardFrom === 'results') this.results.show();
-    else this.menu.show();
+    if (this.leaderboardFrom === 'menu') this.menu.show();
+    else this.results.show();
     this.leaderboardFrom = null;
   }
 
   renderLeaderboardData(data) {
-    this.leaderboard.render(data, this.authManager.isLoggedIn.bind(this.authManager), this.userProfile.getUsername.bind(this.userProfile));
+    this.leaderboard.render(data);
   }
 
   // --- Track shape, descriptors, challenge context ---
@@ -312,6 +263,7 @@ export default class Game {
     this.currentTrackCode = code;
     this.track = new Track(code, this.scene, this.trackGroup);
     this.trackGroup = this.track.group;
+    this.track.applyNightShadowFlags();
     this.createPlayer();
     this.loadBest(code, () => { this.createGhost(); });
     if (
@@ -452,7 +404,7 @@ export default class Game {
       this.clearChallengeMode();
     }, (stageIndex) => {
       this.syncMenuPreviewToSeriesStage(stageIndex);
-    });
+    }, this.menuSeriesPreviewStageIndex);
   }
 
   advanceToNextStage() {
@@ -517,38 +469,9 @@ export default class Game {
 
   renderChallengePreview() {
     const modeStr = this.menu.getSelectedChallengeMode();
-    const { cm, info } = this.loadChallengeConfig(modeStr);
+    const { info } = this.loadChallengeConfig(modeStr);
 
     this.menu.renderChallengePreview(info, challengeResetMs, formatCountdown, () => this.renderChallengePreview());
-
-    this.leaderboard.clearChallengeStats();
-
-    const isSeries = cm.isSeries();
-
-    void (async () => {
-      let data;
-      if (Constants.fakeChallengeLeaderboards) {
-        data = await fakeChallengeLeaderboardData(cm.slug(), this.userProfile.getUsername(), this.userProfile.getCountry());
-      } else if (isSeries) {
-        data = await this.apiClient.fetchChallengeLeaderboard(this.runContext.getChallengeKey(utcDateStr(), utcMondayStr()));
-      } else {
-        data = await this.apiClient.fetchLeaderboard(
-          info.config.code,
-          info.config.laps,
-          info.config.direction,
-          info.config.mode
-        );
-      }
-      const total = data.total_count || 0;
-      let userRank = null;
-      if (this.authManager.isLoggedIn() && data.entries) {
-        for (let j = 0; j < data.entries.length; j++) {
-          if (data.entries[j].username === this.userProfile.getUsername()) { userRank = j + 1; break; }
-        }
-        if (!userRank && data.user_entry) userRank = data.user_entry.rank;
-      }
-      this.leaderboard.setChallengeStats(challengeStatsMessage(total, userRank, this.authManager.isLoggedIn()));
-    })();
   }
 
   // --- State machine entry points ---
@@ -573,9 +496,8 @@ export default class Game {
 
   showResultsScreen() {
     this.resultsPresenter.present(this);
-    this.results.show();
-    void this._submitChallengeLeaderboard();
     this.stateMachine.transitionTo(new FinishedState(), this);
+    void this._beginChallengePostRaceFlow();
   }
 
   _serializeCarSettingsForApi() {
@@ -593,87 +515,133 @@ export default class Game {
   }
 
   /**
-   * Official challenge only: fetch board, optional name prompt, POST /api/submit. CASUAL (no challenge mode) skips.
+   * Challenge final stage: fetch board — qualify screen or "better luck"; else show RACE COMPLETE.
    */
-  async _submitChallengeLeaderboard() {
+  async _beginChallengePostRaceFlow() {
     const cm = this.runContext.getChallengeMode();
-    if (!cm) return;
-    if (Constants.fakeChallengeLeaderboards) return;
-    if (this.seriesMode && !this.currentRun.isFinalStage(this.stageCount)) return;
+    if (!cm || (this.seriesMode && !this.currentRun.isFinalStage(this.stageCount))) {
+      this.results.show();
+      return;
+    }
 
+    const fakeLb = Constants.fakeChallengeLeaderboards;
     const key = this.runContext.getChallengeKey(utcDateStr(), utcMondayStr());
-
     let leaderboardData;
     let compareTime;
 
-    if (cm.isSeries()) {
-      leaderboardData = await this.apiClient.fetchChallengeLeaderboard(key);
-      const snap = this.currentRun.getSeriesResultsSnapshot();
-      compareTime = 0;
-      for (let i = 0; i < snap.length; i++) compareTime += snap[i].time;
-    } else {
-      const info = challengeConfigForMode(cm);
-      if (!info) return;
-      leaderboardData = await this.apiClient.fetchLeaderboard(
-        info.config.code,
-        info.config.laps,
-        info.config.direction,
-        info.config.mode
-      );
-      compareTime = this.player.finishTime;
+    try {
+      if (fakeLb) {
+        if (cm.isSeries()) {
+          const snap = this.currentRun.getSeriesResultsSnapshot();
+          compareTime = 0;
+          for (let i = 0; i < snap.length; i++) compareTime += snap[i].time;
+        } else {
+          compareTime = this.player.finishTime;
+        }
+        leaderboardData = { entries: [] };
+      } else if (cm.isSeries()) {
+        leaderboardData = await this.apiClient.fetchChallengeLeaderboard(key);
+        const snap = this.currentRun.getSeriesResultsSnapshot();
+        compareTime = 0;
+        for (let i = 0; i < snap.length; i++) compareTime += snap[i].time;
+      } else {
+        const info = challengeConfigForMode(cm);
+        if (!info) {
+          this.results.show();
+          return;
+        }
+        leaderboardData = await this.apiClient.fetchLeaderboard(
+          info.config.code,
+          info.config.laps,
+          info.config.direction,
+          info.config.mode
+        );
+        compareTime = this.player.finishTime;
+      }
+    } catch {
+      this.results.show();
+      return;
     }
 
     const entries = leaderboardData.entries || [];
     let qualifies = true;
-    if (entries.length >= 10) {
+    if (!fakeLb && entries.length >= 10) {
       qualifies = compareTime <= entries[9].time_ms;
     }
     if (!qualifies) {
+      this.results.show();
       this.results.addRow(strings.results.betterLuckNextTime, { className: 'arcade-lb-msg' });
       return;
     }
 
-    const defaultName = Storage.shared.getArcadeName();
-    const raw = window.prompt(strings.results.arcadeNamePrompt, defaultName);
-    if (raw == null) return;
-    const displayName = raw.trim().slice(0, 20);
-    if (!displayName) return;
-    Storage.shared.setArcadeName(displayName);
+    const rank = provisionalLeaderboardRank(entries, compareTime);
+    const headline = pickRandom(strings.results.challengeQualifyHeadlines);
+    const subline = formatPlaceholders(strings.results.challengeQualifySubline, { rank });
+    this.challengeQualify.show(headline, subline, Storage.shared.getArcadeName());
+    this.inputContext.setActive(this.challengeQualify);
+  }
 
-    try {
-      if (cm.isSeries()) {
-        const snap = this.currentRun.getSeriesResultsSnapshot();
-        const stages = snap.map(function (sr) {
-          return {
-            track_code: sr.code,
-            laps: this.totalLaps,
-            reversed: sr.direction.isRev(),
-            night_mode: sr.mode.isNight(),
-            time_ms: sr.time
-          };
-        }.bind(this));
-        await this.apiClient.submitLeaderboardTime({
-          challenge_key: key,
-          display_name: displayName,
-          stages
-        });
-      } else {
-        const info = challengeConfigForMode(cm);
-        const packed = Storage.shared.encodeReplay(this.currentRun.getRecording());
-        await this.apiClient.submitLeaderboardTime({
-          track_code: info.config.code,
-          laps: info.config.laps,
-          reversed: info.config.direction.isRev(),
-          night_mode: info.config.mode.isNight(),
-          time_ms: compareTime,
-          display_name: displayName,
-          ghost_data: packed,
-          car_settings: this._serializeCarSettingsForApi()
-        });
-      }
-    } catch {
-      /* network / server error — ignore */
+  async _postChallengeLeaderboardTime(displayName) {
+    const cm = this.runContext.getChallengeMode();
+    if (!cm) return;
+    if (Constants.fakeChallengeLeaderboards) return;
+
+    const key = this.runContext.getChallengeKey(utcDateStr(), utcMondayStr());
+    let compareTime;
+    if (cm.isSeries()) {
+      const snap = this.currentRun.getSeriesResultsSnapshot();
+      compareTime = 0;
+      for (let i = 0; i < snap.length; i++) compareTime += snap[i].time;
+    } else {
+      compareTime = this.player.finishTime;
     }
+
+    if (cm.isSeries()) {
+      const snap = this.currentRun.getSeriesResultsSnapshot();
+      const stages = snap.map(function (sr) {
+        return {
+          track_code: sr.code,
+          laps: this.totalLaps,
+          reversed: sr.direction.isRev(),
+          night_mode: sr.mode.isNight(),
+          time_ms: sr.time
+        };
+      }.bind(this));
+      await this.apiClient.submitLeaderboardTime({
+        challenge_key: key,
+        display_name: displayName,
+        stages
+      });
+    } else {
+      const info = challengeConfigForMode(cm);
+      const packed = Storage.shared.encodeReplay(this.currentRun.getRecording());
+      await this.apiClient.submitLeaderboardTime({
+        track_code: info.config.code,
+        laps: info.config.laps,
+        reversed: info.config.direction.isRev(),
+        night_mode: info.config.mode.isNight(),
+        time_ms: compareTime,
+        display_name: displayName,
+        ghost_data: packed,
+        car_settings: this._serializeCarSettingsForApi()
+      });
+    }
+  }
+
+  async _onChallengeQualifySubmit(displayName) {
+    Storage.shared.setArcadeName(displayName);
+    this.challengeQualify.setSubmitting(true);
+    try {
+      await this._postChallengeLeaderboardTime(displayName);
+    } catch {
+      /* network / server error — still open leaderboard */
+    }
+    this.challengeQualify.setSubmitting(false);
+    this.challengeQualify.hide();
+    this.inputContext.clear(this.challengeQualify);
+    this.leaderboardFrom = 'challenge-qualify';
+    this.results.hide();
+    this.showLeaderboardPanel();
   }
 
   startPostRaceReplay() {
@@ -682,6 +650,12 @@ export default class Game {
     if (rec.length < 2) return;
     this.postRaceReplayActive = true;
     this.postRaceReplayTime = 0;
+    if (this.challengeQualify.isFlowActive()) {
+      this.challengeQualify.hideForReplay();
+      this._challengeQualifyReplayReturn = true;
+    } else {
+      this._challengeQualifyReplayReturn = false;
+    }
     this.results.hide();
     const hint = this.mobile
       ? strings.document.results.replayHintMobile
@@ -697,7 +671,12 @@ export default class Game {
   exitPostRaceReplay() {
     if (!this.postRaceReplayActive) return;
     this._cancelPostRaceReplayOnly();
-    this.results.show();
+    if (this._challengeQualifyReplayReturn) {
+      this.challengeQualify.showAfterReplay();
+      this._challengeQualifyReplayReturn = false;
+    } else {
+      this.results.show();
+    }
   }
 
   _cancelPostRaceReplayOnly() {
@@ -757,6 +736,10 @@ export default class Game {
 
   restartCurrentMap() {
     if (this.postRaceReplayActive) this._cancelPostRaceReplayOnly();
+    if (this.challengeQualify.isFlowActive()) {
+      this.challengeQualify.hide();
+      this.inputContext.clear(this.challengeQualify);
+    }
     this.results.hide();
     if (this.player) { disposeGroup(this.player.mesh); this.scene.remove(this.player.mesh); this.player = null; }
     this.createPlayer();
@@ -767,6 +750,10 @@ export default class Game {
 
   restartRace() {
     if (this.postRaceReplayActive) this._cancelPostRaceReplayOnly();
+    if (this.challengeQualify.isFlowActive()) {
+      this.challengeQualify.hide();
+      this.inputContext.clear(this.challengeQualify);
+    }
     this.results.hide();
     this.currentRun.resetSeriesProgress();
     if (this.seriesMode) {
@@ -896,6 +883,12 @@ export default class Game {
       if (this.sceneRenderer.cleanup) this.sceneRenderer.cleanup();
     }
     this.sceneRenderer = newMode.isNight() ? new NightRenderer(this.scene, this.carSettings) : new DayRenderer(this.scene, this.carSettings);
+    if (this.renderer) {
+      this.renderer.shadowMap.enabled = newMode.isNight();
+      if (this.renderer.shadowMap.enabled) {
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      }
+    }
     if (preserveShowcase) {
       this.cam.showcaseTimer = showcaseTimer;
       this.cam.showcaseShotIndex = showcaseShotIndex;
@@ -948,6 +941,7 @@ export default class Game {
     this.menuPreviewLastRender = 0;
     this.postRaceReplayActive = false;
     this.postRaceReplayTime = 0;
+    this._challengeQualifyReplayReturn = false;
 
     this.seriesMode = false;
     /** Which series stage the menu 3D preview reflects (0-based). */
@@ -955,6 +949,7 @@ export default class Game {
     this.runContext = RunContext.event();
     this.stageCount = dailySeriesConfig().stageCount;
     this.stageConfigs = [
+      { code: '', direction: new FwdDirection(), mode: new DayMode() },
       { code: '', direction: new FwdDirection(), mode: new DayMode() },
       { code: '', direction: new FwdDirection(), mode: new DayMode() },
       { code: '', direction: new FwdDirection(), mode: new DayMode() },
@@ -994,54 +989,49 @@ export default class Game {
     this.input = null;
   }
 
-  _initAuthUiAndSession() {
-    this.authManager = new Auth();
-    this.userProfile = new UserProfile();
-    this.apiClient = new ApiClient(() => this.authManager.getToken());
+  _initPanelsAndSession() {
+    this.apiClient = new ApiClient();
 
     this.hud = new Hud();
     this.results = new ResultsScreen();
     this.menu = new Menu(function (code) { return new TrackCode(code).toSVG(); });
     this.records = new RecordsPanel(function (code) { return new TrackCode(code).toSVG(); }, formatDescriptor);
     this.leaderboard = new LeaderboardPanel(countryFlag);
-    this.auth = new AuthPanel(Constants.countries, countryFlag);
     this.settingsPanel = new SettingsPanel();
     this.ghost = new Ghost();
     this.resultsPresenter = new ResultsPresenter(this.results);
+    this.challengeQualify = new ChallengeQualifyScreen();
 
-    this.userSession = UserSession.fromAuth(this.authManager);
     this.session = GuestSession;
 
     this.menu.setStageCount(this.stageCount);
+    this.menu.setLaps(this.totalLaps);
   }
 
   // ---------------------------------------------------------------------------
   // Private — init() pipeline
   // ---------------------------------------------------------------------------
 
-  _bootstrapSessionUi() {
-    this.loadAuth();
-  }
-
   _configureMobileShell() {
     document.body.classList.add('mobile');
     const m = strings.mobile;
-    const el = (id) => document.getElementById(id);
-    const ep = el('event-start-prompt');
-    const cp = el('challenge-start-prompt');
-    const rp = el('results-prompt');
-    const lb = el('leaderboard-back');
-    const rb = el('records-back');
-    const sb = el('settings-back');
+    const el = (sel) => document.querySelector(sel);
+    const ep = el('.menu-overlay__start-prompt--event');
+    const cp = el('.menu-overlay__start-prompt--challenge');
+    const rp = el('.race-results__prompt');
+    const lb = el('.race-leaderboard__back');
+    const rb = el('.race-records__back');
+    const sb = el('.car-settings__back');
     if (ep) ep.textContent = m.tapStart;
     if (cp) cp.textContent = m.tapStart;
     if (rp) rp.textContent = m.tapRetry;
+    const cqp = el('.challenge-qualify__prompt');
+    if (cqp) cqp.textContent = m.tapRetry;
     if (lb) lb.textContent = m.back;
     if (rb) rb.textContent = m.back;
     if (sb) sb.textContent = m.back;
-    const menuTouchHint = el('menu-touch-hint');
+    const menuTouchHint = el('.menu-overlay__touch-hint');
     if (menuTouchHint) menuTouchHint.textContent = m.menuOverlayHint;
-    this.auth.setCloseText(strings.document.auth.closeMobile);
     const startFromMenuIfReady = () => {
       if (this.stateMachine.current.isMenu() && !this.records.isOpen() && !this.settingsPanel.isOpen() && !this.leaderboard.isOpen()) {
         this.startCountdown();
@@ -1065,7 +1055,8 @@ export default class Game {
     const aspect = window.innerWidth / window.innerHeight;
     const halfW = Constants.camera.viewSize / 2;
     const halfH = halfW / aspect;
-    const orthoCamera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 1000);
+    /** Wide Z slab: strict top-down ortho can clip the y≈0 world plane oddly with up=(0,0,-1); car mesh sits higher so it still drew. */
+    const orthoCamera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.5, 10000);
     orthoCamera.position.set(0, Constants.camera.height, 0);
     orthoCamera.up.set(0, 0, -1);
     orthoCamera.lookAt(0, 0, 0);
@@ -1079,7 +1070,11 @@ export default class Game {
       frameTimeEma: 0.016,
       cooldown: 1.5
     };
-    this.renderer = new THREE.WebGLRenderer({ antialias: preferWebglAntialias(), powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: preferWebglAntialias(),
+      powerPreference: 'high-performance',
+      stencil: true,
+    });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this._applyGpuPixelRatio();
     if (THREE.SRGBColorSpace !== undefined) {
@@ -1088,7 +1083,7 @@ export default class Game {
       this.renderer.outputEncoding = THREE.sRGBEncoding;
     }
     const gameView = document.createElement('div');
-    gameView.id = 'game-view';
+    gameView.className = 'game-view';
     gameView.setAttribute('aria-hidden', 'true');
     gameView.appendChild(this.renderer.domElement);
     document.body.prepend(gameView);
@@ -1096,14 +1091,22 @@ export default class Game {
 
     this.sceneRenderer = this.mode.isNight() ? new NightRenderer(this.scene, this.carSettings) : new DayRenderer(this.scene, this.carSettings);
 
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000, 2000),
-      new THREE.MeshBasicMaterial({ color: 0x5d8a4a })
-    );
+    this.renderer.shadowMap.enabled = this.mode.isNight();
+    if (this.renderer.shadowMap.enabled) {
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+
+    const groundMat = new THREE.MeshLambertMaterial({ color: 0x5d8a4a });
+    /** Top-down ortho puts road and grass at nearly identical NDC depth; if grass writes depth it wins most pixels. Road/lines must own depth where they exist. */
+    groundMat.depthWrite = false;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.matrixAutoUpdate = false;
     ground.frustumCulled = false;
+    /** Earlier draw order; road mesh is above in Y and uses polygon offset vs this plane. */
+    ground.renderOrder = -1;
     ground.updateMatrix();
+    ground.receiveShadow = true;
     this.scene.add(ground);
   }
 
@@ -1114,9 +1117,9 @@ export default class Game {
     sync();
     const mo = new MutationObserver(sync);
     const opts = { attributes: true, attributeFilter: ['class', 'style'] };
-    const ids = ['overlay', 'results', 'leaderboard', 'records', 'auth'];
-    for (let i = 0; i < ids.length; i++) {
-      const el = document.getElementById(ids[i]);
+    const roots = ['.menu-overlay', '.race-results', '.challenge-qualify', '.race-leaderboard', '.race-records'];
+    for (let i = 0; i < roots.length; i++) {
+      const el = document.querySelector(roots[i]);
       if (el) mo.observe(el, opts);
     }
   }
@@ -1125,6 +1128,7 @@ export default class Game {
     let startCode = randomTrackCode();
     let openedSeriesFromUrl = false;
     const params = new URLSearchParams(window.location.search);
+    const sharedCompact = params.get('r');
     const sharedDescriptor = params.get('t');
     const sharedSeries = params.get('s');
     if (sharedSeries) {
@@ -1133,7 +1137,9 @@ export default class Game {
       this.stageCount = descs.length;
       this.menu.setStageCount(this.stageCount);
       for (let di = 0; di < descs.length; di++) {
-        const stageParsed = parseDescriptor(descs[di]);
+        const raw = (descs[di] || '').trim();
+        const compact = decodeTrackShareToken(raw);
+        const stageParsed = compact || parseDescriptor(raw);
         this.stageConfigs[di] = {
           code: stageParsed.code,
           direction: stageParsed.direction || new FwdDirection(),
@@ -1148,6 +1154,13 @@ export default class Game {
       this.menu.setSeriesMode(true);
       startCode = this.stageConfigs[0].code;
       this.buildStageList();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (sharedCompact) {
+      const parsed = decodeTrackShareToken(sharedCompact);
+      if (parsed) {
+        startCode = parsed.code;
+        this.applyParsedDescriptorMeta(parsed);
+      }
       window.history.replaceState({}, '', window.location.pathname);
     } else if (sharedDescriptor) {
       const urlParsed = parseDescriptor(sharedDescriptor);
@@ -1196,7 +1209,7 @@ export default class Game {
   _wireUiCallbacks() {
     this._bindKeyboardAndTouch();
     this._bindMenuCallbacks();
-    this._bindRecordsAuthAndLeaderboard();
+    this._bindRecordsAndLeaderboard();
     this._bindSettingsPanelCallbacks();
   }
 
@@ -1205,11 +1218,15 @@ export default class Game {
       onKeyDown: (e) => {
         if (e.code === 'Backquote' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
           e.preventDefault();
-          this._togglePerfMeter();
+          this._toggleDevTools();
           return;
         }
 
         if (e.code === 'Enter') {
+          const ae = document.activeElement;
+          if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') && ae.closest('.challenge-qualify')) {
+            return;
+          }
           e.preventDefault();
           const enterHandler = this.inputContext.getActiveHandler('EnterKey');
           if (enterHandler) {
@@ -1254,6 +1271,10 @@ export default class Game {
           this.exitPostRaceReplay();
           return;
         }
+        if (this.challengeQualify.isFlowActive()) {
+          this.restartCurrentMap();
+          return;
+        }
         if (this.stateMachine.current.isRacing() || this.stateMachine.current.isCountdown()) {
           this.restartCurrentMap();
         } else if (this.stateMachine.current.isFinished()) {
@@ -1268,6 +1289,10 @@ export default class Game {
       onTouchMenu: () => {
         if (this.postRaceReplayActive) {
           this.exitPostRaceReplay();
+          return;
+        }
+        if (this.challengeQualify.isFlowActive()) {
+          this.restartRace();
           return;
         }
         if (this.stateMachine.current.isFinished()) {
@@ -1321,7 +1346,10 @@ export default class Game {
         this.clearChallengeMode();
         this.menu.stopChallengeCountdown();
         this.seriesMode = this.menu.getSeriesMode();
-        this.totalLaps = this.menu.getLaps();
+        const lapsFromMenuTab = this.menu.getLaps();
+        if (Number.isFinite(lapsFromMenuTab)) this.totalLaps = lapsFromMenuTab;
+        const stagesFromMenu = this.menu.getStageCount();
+        if (Number.isFinite(stagesFromMenu)) this.stageCount = stagesFromMenu;
         if (this.seriesMode) {
           this.menuSeriesPreviewStageIndex = 0;
           this.syncMenuPreviewToSeriesStage(0);
@@ -1338,19 +1366,23 @@ export default class Game {
     });
 
     this.menu.onLapsMinus(() => {
-      if (this.totalLaps > 1) {
-        this.totalLaps--;
-        this.menu.setLaps(this.totalLaps);
-        this.clearChallengeMode();
-      }
+      this.clearChallengeMode();
+      const fromMenu = this.menu.getLaps();
+      if (Number.isFinite(fromMenu)) this.totalLaps = fromMenu;
+      if (!Number.isFinite(this.totalLaps)) this.totalLaps = 3;
+      if (this.totalLaps <= 1) return;
+      this.totalLaps--;
+      this.menu.setLaps(this.totalLaps);
     });
 
     this.menu.onLapsPlus(() => {
-      if (this.totalLaps < 20) {
-        this.totalLaps++;
-        this.menu.setLaps(this.totalLaps);
-        this.clearChallengeMode();
-      }
+      this.clearChallengeMode();
+      const fromMenu = this.menu.getLaps();
+      if (Number.isFinite(fromMenu)) this.totalLaps = fromMenu;
+      if (!Number.isFinite(this.totalLaps)) this.totalLaps = 3;
+      if (this.totalLaps >= 20) return;
+      this.totalLaps++;
+      this.menu.setLaps(this.totalLaps);
     });
 
     this.menu.onDirectionToggle(() => {
@@ -1378,6 +1410,10 @@ export default class Game {
 
     this.menu.onRaceTypeToggle((isSeries) => {
       this.clearChallengeMode();
+      const lapsFromMenu = this.menu.getLaps();
+      if (Number.isFinite(lapsFromMenu)) this.totalLaps = lapsFromMenu;
+      const stagesFromMenu = this.menu.getStageCount();
+      if (Number.isFinite(stagesFromMenu)) this.stageCount = stagesFromMenu;
       this.seriesMode = isSeries;
       if (this.seriesMode) {
         this.menuSeriesPreviewStageIndex = 0;
@@ -1389,24 +1425,28 @@ export default class Game {
     });
 
     this.menu.onStagesMinus(() => {
-      if (this.stageCount > 2) {
-        this.stageCount--;
-        this.menu.setStageCount(this.stageCount);
-        this.clearChallengeMode();
-        this.buildStageList();
-        if (this.menuSeriesPreviewStageIndex >= this.stageCount) {
-          this.menuSeriesPreviewStageIndex = this.stageCount - 1;
-        }
+      this.clearChallengeMode();
+      const fromMenu = this.menu.getStageCount();
+      if (Number.isFinite(fromMenu)) this.stageCount = fromMenu;
+      if (!Number.isFinite(this.stageCount)) this.stageCount = 3;
+      if (this.stageCount <= 2) return;
+      this.stageCount--;
+      this.menu.setStageCount(this.stageCount);
+      this.buildStageList();
+      if (this.menuSeriesPreviewStageIndex >= this.stageCount) {
+        this.menuSeriesPreviewStageIndex = this.stageCount - 1;
       }
     });
 
     this.menu.onStagesPlus(() => {
-      if (this.stageCount < 5) {
-        this.stageCount++;
-        this.menu.setStageCount(this.stageCount);
-        this.clearChallengeMode();
-        this.buildStageList();
-      }
+      this.clearChallengeMode();
+      const fromMenu = this.menu.getStageCount();
+      if (Number.isFinite(fromMenu)) this.stageCount = fromMenu;
+      if (!Number.isFinite(this.stageCount)) this.stageCount = 3;
+      if (this.stageCount >= 6) return;
+      this.stageCount++;
+      this.menu.setStageCount(this.stageCount);
+      this.buildStageList();
     });
 
     this.menu.onRngAll(() => {
@@ -1424,7 +1464,7 @@ export default class Game {
     });
   }
 
-  _bindRecordsAuthAndLeaderboard() {
+  _bindRecordsAndLeaderboard() {
     this.results.onCopy(() => {
       navigator.clipboard.writeText(formatDescriptor(this.currentTrackCode, this.direction, this.mode, this.totalLaps)).then(() => {
         this.results.flashCopyDone();
@@ -1453,9 +1493,6 @@ export default class Game {
       this.hideSettings();
     });
 
-    this.auth.onSubmit(this.handleAuthSubmit.bind(this));
-    this.auth.onClose(this.hideAuthPanel.bind(this));
-
     this.results.onReplay(() => {
       if (this.stateMachine.current.isFinished()) this.startPostRaceReplay();
     });
@@ -1479,9 +1516,19 @@ export default class Game {
     });
     this.leaderboard.onBack(() => {
       this.hideLeaderboardPanel();
-      if (this.leaderboardFrom === 'results') this.results.show();
-      else this.menu.show();
+      if (this.leaderboardFrom === 'menu') this.menu.show();
+      else this.results.show();
       this.leaderboardFrom = null;
+    });
+
+    this.challengeQualify.onSubmit(this._onChallengeQualifySubmit.bind(this));
+    this.challengeQualify.onReplay(() => {
+      if (this.stateMachine.current.isFinished()) this.startPostRaceReplay();
+    });
+    this.challengeQualify.onShare(() => {
+      navigator.clipboard.writeText(this.resultsPresenter.buildShareText(this)).then(() => {
+        this.challengeQualify.flashShareDone();
+      });
     });
   }
 
@@ -1578,7 +1625,8 @@ export default class Game {
   // ---------------------------------------------------------------------------
 
   _nextFrameDelta(time) {
-    const dt = this.lastTime ? Math.min((time - this.lastTime) / 1000, 0.05) : 0.016;
+    const raw = this.lastTime ? (time - this.lastTime) / 1000 : 0.016;
+    const dt = Number.isFinite(raw) ? Math.max(0, Math.min(raw, 0.05)) : 0.016;
     this.lastTime = time;
     return dt;
   }
@@ -1629,10 +1677,10 @@ export default class Game {
     return true;
   }
 
-  _initPerfMeter() {
-    this._perfMeterVisible = false;
-    this._perfMeterEl = document.getElementById('perf-meter');
-    this._perfEls = this._perfMeterEl
+  _initDevTools() {
+    this._devToolsVisible = false;
+    this._devToolsEl = document.getElementById('dev-tools');
+    this._perfEls = this._devToolsEl
       ? {
           fps: document.getElementById('perf-fps'),
           ms: document.getElementById('perf-ms'),
@@ -1647,31 +1695,33 @@ export default class Game {
     this._perfLastCalls = 0;
     this._perfLastTris = 0;
     try {
-      if (localStorage.getItem('carreritas_perf_meter') === '1') {
-        this._setPerfMeterVisible(true);
+      const persisted =
+        localStorage.getItem('carreritas_dev_tools') ?? localStorage.getItem('carreritas_perf_meter');
+      if (persisted === '1') {
+        this._setDevToolsVisible(true);
       }
     } catch (_e) {
       /* ignore */
     }
   }
 
-  _setPerfMeterVisible(visible) {
-    this._perfMeterVisible = visible;
-    if (!this._perfMeterEl) return;
-    this._perfMeterEl.classList.toggle('perf-meter--hidden', !visible);
-    this._perfMeterEl.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  _setDevToolsVisible(visible) {
+    this._devToolsVisible = visible;
+    if (!this._devToolsEl) return;
+    this._devToolsEl.classList.toggle('dev-tools--hidden', !visible);
+    this._devToolsEl.setAttribute('aria-hidden', visible ? 'false' : 'true');
     try {
-      localStorage.setItem('carreritas_perf_meter', visible ? '1' : '0');
+      localStorage.setItem('carreritas_dev_tools', visible ? '1' : '0');
     } catch (_e) {
       /* ignore */
     }
   }
 
-  _togglePerfMeter() {
-    this._setPerfMeterVisible(!this._perfMeterVisible);
+  _toggleDevTools() {
+    this._setDevToolsVisible(!this._devToolsVisible);
   }
 
-  _tickPerfMeter(dt, rendered, cpuWorkMs) {
+  _tickDevTools(dt, rendered, cpuWorkMs) {
     if (!this._perfEls || !this._perfEls.fps) return;
     const a = 0.08;
     this._perfFpsEma = this._perfFpsEma * (1 - a) + (1 / Math.max(dt, 1e-6)) * a;
@@ -1682,7 +1732,7 @@ export default class Game {
       this._perfLastCalls = r.calls;
       this._perfLastTris = r.triangles;
     }
-    if (!this._perfMeterVisible) return;
+    if (!this._devToolsVisible) return;
     this._perfEls.fps.textContent = this._perfFpsEma.toFixed(0);
     this._perfEls.ms.textContent = this._perfMsEma.toFixed(1);
     this._perfEls.cpu.textContent = this._perfCpuEma.toFixed(1);

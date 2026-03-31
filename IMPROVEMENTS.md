@@ -16,9 +16,9 @@ There are no tests. The game logic (track generation from string, lap counting, 
 
 ## User account extensions
 
-Basic user accounts exist (username/password with bcrypt + JWT, cross-device settings sync, optional country on registration). Remaining features: country-based filtering on leaderboards, a friend system (add other users by search or username), and car color stored in the profile so friend ghosts render in the player's chosen colors.
+Accounts and JWT auth were removed; leaderboards use anonymous display names and car settings stay in `localStorage`. If social features return (country filters, friends, cross-device profile), they would need a fresh design and server routes.
 
-**Where:** `api/`, `src/auth.js`, `src/game.js`, future schema additions
+**Where:** future work (schema may still reference legacy `users` / `car_settings` from older deploys)
 **Why it matters:** Prerequisite for social features (country rankings, friend invites, personalized friend ghosts).
 
 ## Challenge finalization and archiving
@@ -124,7 +124,7 @@ Ghost replays already use delta encoding, quantization (positions ×10, angles �
 **Still worth tightening (when touching related code):**
 
 - **Menu + track sync:** repeated `clearChallengeMode()`, menu-visible `rebuildTrack`, and lap/stage clamping in menu callbacks — a small helper could reduce duplication.
-- **Leaderboard fetch + render:** the async fetch → `LeaderboardPanel.render` pattern with repeated `.bind` could be wrapped once (e.g. panel takes profile/auth handles).
+- **Leaderboard fetch + render:** the async fetch → `LeaderboardPanel.render` pattern could be wrapped once (e.g. panel encapsulates fetch + render).
 
 **Where:** `src/game.js`, `src/ui/leaderboard-panel.js`, menu wiring
 **Why it matters:** Less noise in the orchestrator makes state transitions and track lifecycle easier to follow.
@@ -139,8 +139,6 @@ Run against a DB with migrations applied (`migrations/001_leaderboard_anonymous.
 - **GET** `/api/leaderboard?track_code=…&laps=…&reversed=…&night_mode=…` — returns up to 10 entries, `total_count`.
 - **Weekly/daily series:** Complete all stages — qualification + name → POST with `challenge_key` + `stages` array; GET `/api/challenge?challenge_key=ws:…` shows aggregated totals.
 - **Champion row:** #1 single-track submission stores `ghost_data` + `car_settings` when provided; trim removes extras beyond top 10.
-- **Auth hidden:** Login/logout controls not visible; session code paths remain for future use.
-
 **Automated:** `npm test` runs `api/self-test.js` (challenge seed helpers only, no DB).
 
 ## Legacy `challenge_times` migration
@@ -149,3 +147,33 @@ Historical rows were not backfilled into per-stage `best_times`; old table is dr
 
 **Where:** `migrations/001_leaderboard_anonymous.sql`
 **Why it matters:** Operators should not expect old series totals to appear automatically after deploy.
+
+## CSS: legacy class names and raw values
+
+`docs/CSS.md` defines BEM, spacing tokens, and variable usage. `index.html` and UI modules now use BEM-style hooks (classes / `querySelector`); some `styles.css` rules still duplicate sizing (e.g. pattern buttons) or use hardcoded colors outside `:root` where tokens are not yet applied.
+
+**Where:** `src/styles.css`, `docs/CSS.md`
+**Why it matters:** Finishing token coverage and removing leftover duplicates keeps theme tweaks one place to change.
+
+## `scripts/css-bem-migrate.mjs` ESLint noise
+
+The one-off migration script triggers `no-undef` for `console` under the repo ESLint config.
+
+**Where:** `scripts/css-bem-migrate.mjs`
+**Why it matters:** `npm run lint` fails unless the script is excluded or given a Node env — minor hygiene.
+
+## Grey wall lines vs corridor collision
+
+Road **inner/outer** contours now come from **Clipper** offset (`src/track-clipper.js`, round joins) when that yields a valid two-loop annulus; kerb `LineLoop`s prefer **mesh boundary extraction** from `ShapeGeometry`, else lifted Clipper rings, else (strip + legacy offset only) **outer** kerb line to avoid self-crossing grey loops. Corridor collision uses **spine + `spineHalfWidths`**; when Clipper builds the road, half-widths are uniform nominal width (not curvature-pinched). If Clipper fails or triangulation falls back to strips, rare pathologies may still show odd visuals.
+
+**Where:** `src/track.js` (`_addWallLineLoops`, `buildAnnulusShapeGeometry`), `src/track-clipper.js`, `src/player.js` (`trackCorridorCollision`)
+**Why it matters:** Worst-case tracks may still look off at the kerb lines even though driving is valid.
+
+## Track / ground missing while the car still renders
+
+Likely cause addressed: `trackCorridorCollision` only runs in `RacingState` (not during countdown). Unbounded per-segment `push = clearance - depth` could sum to a huge displacement in one frame, moving the car far off the asphalt; the camera follows the car, so the world reads as empty grass/background while the HUD still runs.
+
+**Mitigation:** worst-violation-only push per frame (no multi-segment / two-pass loops), capped `MAX_CORRIDOR_PUSH_PER_FRAME`, depth slack, and velocity response that only removes velocity into the wall (no extra global damping). (`src/player.js`)
+
+**Where:** `src/player.js` (`trackCorridorCollision`), previously also `src/track.js` / renderer flags
+**Why it matters:** Distinguishes “nothing rendered” from “camera no longer aimed at the track.”

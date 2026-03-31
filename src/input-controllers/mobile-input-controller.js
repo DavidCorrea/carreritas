@@ -12,10 +12,10 @@ export default class MobileInputController extends InputController {
     this.touchIds = { steer: null, throttle: null };
     this.steerOriginX = 0;
     this.DEAD_ZONE = 15;
-    
+
     // Mobile also supports keyboard for some actions
     this.keyboardController = new KeyboardInputController(canvas, callbacks);
-    
+
     // DOM elements
     this.steerIndicator = null;
     this.steerDot = null;
@@ -24,7 +24,7 @@ export default class MobileInputController extends InputController {
     this.restartBtn = null;
     this.cameraBtn = null;
     this.menuBtn = null;
-    
+
     // Event handlers
     this.touchStartHandler = null;
     this.touchMoveHandler = null;
@@ -34,15 +34,15 @@ export default class MobileInputController extends InputController {
   setup() {
     // Setup keyboard for non-driving actions
     this.keyboardController.setup();
-    
+
     // Get DOM elements
-    this.steerIndicator = document.getElementById('touch-steer-indicator');
-    this.steerDot = document.getElementById('touch-steer-dot');
-    this.gasHighlight = document.getElementById('touch-gas-highlight');
-    this.brakeHighlight = document.getElementById('touch-brake-highlight');
-    this.restartBtn = document.getElementById('touch-restart-btn');
-    this.cameraBtn = document.getElementById('touch-camera-btn');
-    this.menuBtn = document.getElementById('touch-menu-btn');
+    this.steerIndicator = document.querySelector('.touch-steer-indicator');
+    this.steerDot = document.querySelector('.touch-steer-dot');
+    this.gasHighlight = document.querySelector('.touch-gas-highlight');
+    this.brakeHighlight = document.querySelector('.touch-brake-highlight');
+    this.restartBtn = document.querySelector('.touch-ui__restart');
+    this.cameraBtn = document.querySelector('.touch-ui__camera');
+    this.menuBtn = document.querySelector('.touch-ui__menu');
 
     this.touchStartHandler = (e) => {
       e.preventDefault();
@@ -151,21 +151,24 @@ export default class MobileInputController extends InputController {
   getInput(isTrackCodeFocused) {
     // Get keyboard input for non-driving actions
     const kbInput = this.keyboardController.getInput(isTrackCodeFocused);
-    
+
     // For driving, use touch input if available, otherwise fall back to keyboard
-    const input = { accel: kbInput.accel, steer: kbInput.steer };
-    
+    const input = {
+      accel: Number.isFinite(kbInput.accel) ? kbInput.accel : 0,
+      steer: Number.isFinite(kbInput.steer) ? kbInput.steer : 0
+    };
+
     if (!isTrackCodeFocused) {
       if (this.touchState.accel) input.accel = this.touchState.accel;
       if (this.touchState.steer) input.steer = this.touchState.steer;
     }
-    
+
     return input;
   }
 
   cleanup() {
     this.keyboardController.cleanup();
-    
+
     if (this.touchStartHandler) {
       this.canvas.removeEventListener('touchstart', this.touchStartHandler);
     }

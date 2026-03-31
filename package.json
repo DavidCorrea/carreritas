@@ -1,23 +1,23 @@
 {
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "dev:full": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "node api/self-test.js && node tests/gpu-tier.mjs"
+    "test": "node api/self-test.js && node tests/gpu-tier.mjs && node tests/track-share-token.mjs && node tests/track-corridor.mjs && node tests/track-clipper.mjs",
+    "db:migrate:display-name": "node scripts/migrate-003-display-name.mjs"
   },
   "lint-staged": {
     "*.js": "eslint --fix"
   },
   "dependencies": {
-    "three": "^0.150.0",
     "@neondatabase/serverless": "^0.10",
-    "bcryptjs": "^2.4",
-    "jsonwebtoken": "^9.0",
-    "pg": "^8.20.0"
+    "clipper-lib": "^6.4.2",
+    "pg": "^8.20.0",
+    "three": "^0.150.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

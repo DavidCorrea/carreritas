@@ -7,10 +7,10 @@ export default class RecordsPanel {
   constructor(generateTrackSVG, formatDescriptor) {
     this._generateTrackSVG = generateTrackSVG;
     this._formatDescriptor = formatDescriptor;
-    this._recordsEl = document.getElementById('records');
-    this._recordsListEl = document.getElementById('records-list');
-    this._recordsBtn = document.getElementById('records-btn');
-    this._recordsBackEl = document.getElementById('records-back');
+    this._recordsEl = document.querySelector('.race-records');
+    this._recordsListEl = document.querySelector('.race-records__list');
+    this._recordsBtn = document.querySelector('.menu-overlay__records-btn');
+    this._recordsBackEl = document.querySelector('.race-records__back');
   }
 
   show() { this._recordsEl.classList.remove('hidden'); }
@@ -60,13 +60,10 @@ export default class RecordsPanel {
       summaryP.title = fullDescriptor;
       info.appendChild(summaryP);
 
-      const row = document.createElement('div');
-      row.className = 'record-card-row';
-
       const time = document.createElement('span');
       time.className = 'record-time';
       time.textContent = formatTime(rec.time);
-      row.appendChild(time);
+      info.appendChild(time);
 
       const dateSpan = document.createElement('span');
       dateSpan.className = 'record-date';
@@ -78,7 +75,7 @@ export default class RecordsPanel {
         dateSpan.textContent = '\u00a0';
         dateSpan.setAttribute('aria-hidden', 'true');
       }
-      row.appendChild(dateSpan);
+      info.appendChild(dateSpan);
 
       const retryBtn = document.createElement('button');
       retryBtn.className = 'record-retry';
@@ -87,10 +84,9 @@ export default class RecordsPanel {
       (function (r) {
         retryBtn.addEventListener('click', function () { onRetry(r); });
       })(rec);
-      row.appendChild(retryBtn);
 
-      info.appendChild(row);
       card.appendChild(info);
+      card.appendChild(retryBtn);
       this._recordsListEl.appendChild(card);
     }
   }

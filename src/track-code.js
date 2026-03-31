@@ -1,33 +1,38 @@
 import Constants from './constants.js';
+import { TRACK_CODE_LENGTH, normalizeTrackCode } from './utils/track-descriptor.js';
 
 function computeTrackPoints2D(code) {
-  let str = code;
-  while (str.length < 18) str += ' ';
-  str = str.substring(0, 18);
+  const str = normalizeTrackCode(code);
 
   const radii = [];
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < TRACK_CODE_LENGTH; i++) {
     const c = str.charCodeAt(i);
     const norm = (Math.min(Math.max(c, 32), 126) - 32) / 94;
-    radii.push(140 + norm * 240);
+    radii.push(100 + norm * 320);
   }
 
-  const smoothed = [];
-  for (let i = 0; i < 18; i++) {
-    const prev = radii[(i + 17) % 18];
-    const curr = radii[i];
-    const next = radii[(i + 1) % 18];
-    smoothed.push(prev * 0.25 + curr * 0.5 + next * 0.25);
+  /** Circular [0.2, 0.6, 0.2] — two passes tame wild codes so the CatmullRom isn’t all sharp radial zigzags. */
+  function smoothRadiiRing(arr) {
+    const out = [];
+    for (let i = 0; i < TRACK_CODE_LENGTH; i++) {
+      const prev = arr[(i + TRACK_CODE_LENGTH - 1) % TRACK_CODE_LENGTH];
+      const curr = arr[i];
+      const next = arr[(i + 1) % TRACK_CODE_LENGTH];
+      out.push(prev * 0.2 + curr * 0.6 + next * 0.2);
+    }
+    return out;
   }
+  let smoothed = smoothRadiiRing(radii);
+  smoothed = smoothRadiiRing(smoothed);
 
   let shift = 0;
   for (let i = 0; i < str.length; i++) shift += str.charCodeAt(i);
-  shift = shift % 18;
+  shift = shift % TRACK_CODE_LENGTH;
 
   const points = [];
-  for (let i = 0; i < 18; i++) {
-    const idx = (i + shift) % 18;
-    const angle = (idx / 18) * Math.PI * 2;
+  for (let i = 0; i < TRACK_CODE_LENGTH; i++) {
+    const idx = (i + shift) % TRACK_CODE_LENGTH;
+    const angle = (idx / TRACK_CODE_LENGTH) * Math.PI * 2;
     points.push({ x: Math.cos(angle) * smoothed[idx], y: Math.sin(angle) * smoothed[idx] });
   }
   return points;
@@ -39,7 +44,7 @@ function catmullRomPoint2D(p0, p1, p2, p3, t) {
   let d01 = (dx * dx + dy * dy)**0.25;
   dx = p2.x - p1.x; dy = p2.y - p1.y;
   let d12 = (dx * dx + dy * dy)**0.25;
-  dx = p3.x - p2.x; dy = p2.y - p1.y;
+  dx = p3.x - p2.x; dy = p3.y - p2.y;
   let d23 = (dx * dx + dy * dy)**0.25;
   if (d01 < 1e-4) d01 = 1;
   if (d12 < 1e-4) d12 = 1;
@@ -64,10 +69,7 @@ function catmullRomPoint2D(p0, p1, p2, p3, t) {
 
 export default class TrackCode {
   constructor(code) {
-    // Normalize: pad to 18 chars, truncate if longer
-    let str = code || '';
-    while (str.length < 18) str += ' ';
-    this._code = str.substring(0, 18);
+    this._code = normalizeTrackCode(code);
   }
 
   toString() {
@@ -86,12 +88,13 @@ export default class TrackCode {
   toSVG() {
     const pts = computeTrackPoints2D(this._code);
     const SEGS = 20;
+    const n = pts.length;
     const center = [];
-    for (let seg = 0; seg < 18; seg++) {
-      const p0 = pts[(seg + 17) % 18];
+    for (let seg = 0; seg < n; seg++) {
+      const p0 = pts[(seg + n - 1) % n];
       const p1 = pts[seg];
-      const p2 = pts[(seg + 1) % 18];
-      const p3 = pts[(seg + 2) % 18];
+      const p2 = pts[(seg + 1) % n];
+      const p3 = pts[(seg + 2) % n];
       for (let j = 0; j < SEGS; j++) {
         center.push(catmullRomPoint2D(p0, p1, p2, p3, j / SEGS));
       }
@@ -101,9 +104,9 @@ export default class TrackCode {
       d += 'L' + center[pi].x.toFixed(1) + ' ' + center[pi].y.toFixed(1);
     }
     d += 'Z';
-    const n = center.length;
-    const tx = center[1].x - center[n - 1].x;
-    const ty = center[1].y - center[n - 1].y;
+    const nc = center.length;
+    const tx = center[1].x - center[nc - 1].x;
+    const ty = center[1].y - center[nc - 1].y;
     const tl = Math.sqrt(tx * tx + ty * ty);
     const hw = Constants.track.width / 2;
     const snx = -ty / tl, sny = tx / tl;

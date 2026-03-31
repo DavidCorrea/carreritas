@@ -2,11 +2,11 @@
 
 ## Track Code
 
-An 18-character string that deterministically generates a closed track shape. Each character's ASCII value maps to a radial distance at one of 18 evenly-spaced angles, which are smoothed and connected with a Catmull-Rom spline. The starting point of the track is shifted by an offset derived from the sum of all character codes in the string — different codes produce different start/finish positions. The same code always produces the same track and the same start position.
+A 36-character string that deterministically generates a closed track shape. Each character's ASCII value maps to a radial distance at one of 36 evenly-spaced angles, which are smoothed and connected with a Catmull-Rom spline. The starting point of the track is shifted by an offset derived from the sum of all character codes in the string — different codes produce different start/finish positions. The same code always produces the same track and the same start position.
 
 ## Track Descriptor
 
-A compact string that fully identifies a race configuration: track shape, direction, mode, and lap count. Format: `<18-char code> <F|R><D|N><laps>`. Example: `Ax!9kR#m2$pLqZ&w@f FD3` means forward, day, 3 laps. The space separator is safe because track codes use ASCII 33–126 (no spaces). Used consistently in results screens, the copy button, and best runs cards. Pasting a full descriptor into any track code input parses and applies all parts; pasting a bare 18-char code still works (missing parts keep current settings).
+A compact string that fully identifies a race configuration: track shape, direction, mode, and lap count. Format: `<36-char code> <F|R><D|N><laps>`. The space separator is safe because track codes use ASCII 33–126 (no spaces). Used consistently in results screens, the copy button, and best runs cards. Pasting a full descriptor into any track code input parses and applies all parts; pasting a bare code still works (missing parts keep current settings).
 
 ## Lap
 
@@ -78,7 +78,7 @@ Settings are previewed live on the current map. The settings UI includes a day/n
 
 ## Share
 
-After finishing a race or series, a Share button copies a formatted text to the clipboard. The text includes a randomized opener/closer (drawn from separate pools for regular runs vs. new records — record messages are more confident), the race times, and a link that loads the same track configuration. Single-race links use `?t=<descriptor>`. Series links use `?s=<descriptor>,<descriptor>,...` with one descriptor per stage. On page load, these URL parameters are parsed and applied, then cleaned from the address bar.
+After finishing a race or series, a Share button copies a formatted text to the clipboard. The text includes a randomized opener/closer (drawn from separate pools for regular runs vs. new records — record messages are more confident), the race times, and a link that loads the same track configuration. **Primary links** use a compact token: single race `?r=r1.<base64url>`, series `?s=r1.<token>,r1.<token>,...` (URL-safe, no heavy `%` encoding). **Legacy** plain-text descriptors still work: `?t=<code> <F|R><D|N><laps>` and comma-separated `?s=` for series. The share link uses `window.location.origin` when available so local dev matches the running host. On page load, these URL parameters are parsed and applied, then cleaned from the address bar.
 
 ## Best Runs (Records)
 

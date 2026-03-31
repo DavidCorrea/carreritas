@@ -7,12 +7,11 @@ const LB_ROW_STAGGER_MS = 48;
 export default class LeaderboardPanel {
   constructor(countryFlag) {
     this._countryFlag = countryFlag;
-    this._leaderboardEl = document.getElementById('leaderboard');
-    this._leaderboardListEl = document.getElementById('leaderboard-list');
-    this._leaderboardTrackEl = document.getElementById('leaderboard-track');
-    this._leaderboardBackEl = document.getElementById('leaderboard-back');
-    this._leaderboardMenuBtn = document.getElementById('leaderboard-menu-btn');
-    this._challengeLbSubtitle = document.getElementById('challenge-lb-subtitle');
+    this._leaderboardEl = document.querySelector('.race-leaderboard');
+    this._leaderboardListEl = document.querySelector('.race-leaderboard__list');
+    this._leaderboardTrackEl = document.querySelector('.race-leaderboard__track');
+    this._leaderboardBackEl = document.querySelector('.race-leaderboard__back');
+    this._leaderboardMenuBtn = document.querySelector('.menu-overlay__leaderboard-btn');
   }
 
   /**
@@ -121,7 +120,7 @@ export default class LeaderboardPanel {
     return row;
   }
 
-  render(data, isLoggedIn, getUsername) {
+  render(data) {
     const entries = data.entries || [];
     const list = this._leaderboardListEl;
     list.removeAttribute('aria-busy');
@@ -129,8 +128,7 @@ export default class LeaderboardPanel {
 
     const n = Math.min(entries.length, LB_TOP_SLOTS);
     for (let i = 0; i < n; i++) {
-      const isYou = isLoggedIn() && entries[i].username === getUsername();
-      list.appendChild(this._renderRow(entries[i], i + 1, isYou, i));
+      list.appendChild(this._renderRow(entries[i], i + 1, false, i));
     }
     for (let r = n + 1; r <= LB_TOP_SLOTS; r++) {
       list.appendChild(this._renderEmptySlot(r));
@@ -144,16 +142,6 @@ export default class LeaderboardPanel {
     }
 
     this._scheduleCellFadeIn(list);
-  }
-
-  setChallengeStats(message) {
-    this._challengeLbSubtitle.querySelector('span').textContent = message;
-    this._challengeLbSubtitle.classList.add('visible');
-  }
-
-  clearChallengeStats() {
-    this._challengeLbSubtitle.classList.remove('visible');
-    this._challengeLbSubtitle.querySelector('span').textContent = '';
   }
 
   onBack(handler) { this._leaderboardBackEl.addEventListener('click', handler); }

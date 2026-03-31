@@ -2,6 +2,7 @@ import { Direction } from '../directions/index.js';
 import { Mode } from '../modes/index.js';
 import { strings, formatPlaceholders } from '../strings.js';
 import { pickRandom } from './core.js';
+import { TRACK_CODE_LENGTH } from './track-descriptor.js';
 
 export function mulberry32(seed) {
   return function () {
@@ -14,7 +15,7 @@ export function mulberry32(seed) {
 
 export function seededCode(rng) {
   let out = '';
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < TRACK_CODE_LENGTH; i++) {
     out += String.fromCharCode(33 + Math.floor(rng() * 94));
   }
   return out;
@@ -133,7 +134,21 @@ export function challengeConfigForMode(cm) {
   return null;
 }
 
-export function challengeStatsMessage(totalCount, userRank, _isLoggedIn) {
+/**
+ * 1-based rank if `timeMs` were inserted into a leaderboard sorted by time (ascending).
+ * @param {{ time_ms: number }[]} entries
+ * @param {number} timeMs
+ */
+export function provisionalLeaderboardRank(entries, timeMs) {
+  const arr = (entries || []).slice().sort(function (a, b) {
+    return a.time_ms - b.time_ms;
+  });
+  let i = 0;
+  while (i < arr.length && timeMs > arr[i].time_ms) i++;
+  return i + 1;
+}
+
+export function challengeStatsMessage(totalCount, userRank) {
   const cs = strings.challengeStats;
   const taunts = strings.challengeTaunts;
   if (totalCount === 0) return pickRandom(cs.empty);

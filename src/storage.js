@@ -69,31 +69,6 @@ export default class Storage {
     this._setItem(Constants.storage.settingsKey, JSON.stringify(settings));
   }
 
-  getAuthRecord() {
-    try {
-      const raw = this._getItem(Constants.storage.authKey);
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch (_) {}
-    return null;
-  }
-
-  setAuthRecord(record) {
-    this._setItem(Constants.storage.authKey, JSON.stringify(record));
-  }
-
-  removeAuthRecord() {
-    this._removeItem(Constants.storage.authKey);
-  }
-
-  mergeAuthRecord(partial) {
-    const existing = this.getAuthRecord() || {};
-    for (const k in partial) {
-      if (partial[k] !== undefined) existing[k] = partial[k];
-    }
-    this.setAuthRecord(existing);
-  }
-
   getArcadeName() {
     try {
       return this._getItem(Constants.storage.arcadeNameKey) || '';
@@ -104,15 +79,6 @@ export default class Storage {
 
   setArcadeName(name) {
     if (name) this._setItem(Constants.storage.arcadeNameKey, name);
-  }
-
-  clearAuthProfileKeepToken() {
-    const saved = this.getAuthRecord();
-    if (saved && saved.token) {
-      this.setAuthRecord({ token: saved.token });
-    } else {
-      this.removeAuthRecord();
-    }
   }
 
   storageKey(code, laps, direction, mode) {

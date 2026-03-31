@@ -1,7 +1,7 @@
-const { sendJson } = require('./_auth');
+const { sendJson } = require('./_respond');
 
 /**
- * Legacy authenticated personal-best sync — disabled. Clients use local Storage + POST /api/submit for challenges.
+ * Legacy personal-best sync — disabled. Clients use local Storage + POST /api/submit for challenges.
  */
 module.exports = async function (req, res) {
   if (req.method === 'GET') {

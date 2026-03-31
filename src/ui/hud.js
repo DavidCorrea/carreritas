@@ -3,16 +3,16 @@ import { strings } from '../strings.js';
 
 export default class Hud {
   constructor() {
-    this._hudEl = document.getElementById('hud');
-    this._lapDisplay = document.getElementById('lap-display');
-    this._lapTimesList = document.getElementById('lap-times-list');
-    this._bestDisplay = document.getElementById('best-display');
-    this._timeDisplay = document.getElementById('time-display');
-    this._speedDisplay = document.getElementById('speed-display');
-    this._stageDisplayEl = document.getElementById('stage-display');
-    this._countdownEl = document.getElementById('countdown');
+    this._hudEl = document.querySelector('.race-hud');
+    this._lapDisplay = document.querySelector('.race-hud__lap');
+    this._lapTimesList = document.querySelector('.race-hud__lap-times');
+    this._bestDisplay = document.querySelector('.race-hud__best');
+    this._timeDisplay = document.querySelector('.race-hud__time');
+    this._speedDisplay = document.querySelector('.race-hud__speed');
+    this._stageDisplayEl = document.querySelector('.race-hud__stage');
+    this._countdownEl = document.querySelector('.race-countdown');
     this._semLights = this._countdownEl.querySelectorAll('.sem-light');
-    this._cameraDisplayEl = document.getElementById('camera-display');
+    this._cameraDisplayEl = document.querySelector('.race-hud__camera');
 
     this._lap = -1;
     this._best = -1;
@@ -64,7 +64,7 @@ export default class Hud {
 
   addLapTime(lapNum, lapTime, prevLapTime) {
     const div = document.createElement('div');
-    div.className = 'hud-box';
+    div.className = 'race-hud__box';
     if (lapNum > 1) div.style.marginTop = '4px';
     let text = strings.results.lapRow(lapNum, formatTime(lapTime));
     if (lapNum > 1 && prevLapTime != null) {

@@ -1,9 +1,11 @@
 import Constants from '../constants.js';
+import { HEADLIGHT_DECAL_POLYGON_OFFSET, ROAD_SURFACE_Y } from '../intrinsic-constants.js';
 import { hexToInt, hexToRgb } from '../utils/index.js';
 
 const UNDERGLOW_SEGMENTS = 28;
 
-const GROUND_DECAL_OFFSET = { polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
+const INNER_Y = ROAD_SURFACE_Y + 0.012;
+const OUTER_RING_Y = ROAD_SURFACE_Y + 0.018;
 
 export function createUnderglowMesh(color, underglowOpacity) {
   const group = new THREE.Group();
@@ -13,13 +15,22 @@ export function createUnderglowMesh(color, underglowOpacity) {
 
   const inner = new THREE.Mesh(
     new THREE.CircleGeometry(Constants.car.radius * 1.05, 20),
-    new THREE.MeshBasicMaterial(Object.assign({
-      color: colorInt, transparent: true, opacity: 0.45 * fade, depthWrite: false
-    }, GROUND_DECAL_OFFSET))
+    new THREE.MeshBasicMaterial(
+      Object.assign(
+        {
+          color: colorInt,
+          transparent: true,
+          opacity: 0.45 * fade,
+          depthWrite: false,
+          depthTest: true,
+        },
+        HEADLIGHT_DECAL_POLYGON_OFFSET
+      )
+    )
   );
   inner.rotation.x = -Math.PI / 2;
-  inner.position.y = 0.045;
-  inner.renderOrder = 2;
+  inner.position.y = INNER_Y;
+  inner.renderOrder = 8;
   group.add(inner);
 
   const edgeR = Constants.car.radius * 0.9;
@@ -30,9 +41,9 @@ export function createUnderglowMesh(color, underglowOpacity) {
   for (let i = 0; i <= UNDERGLOW_SEGMENTS; i++) {
     const a = (i / UNDERGLOW_SEGMENTS) * Math.PI * 2;
     const cx = Math.cos(a), cz = Math.sin(a);
-    positions.push(cx * edgeR, 0.055, cz * edgeR);
+    positions.push(cx * edgeR, OUTER_RING_Y, cz * edgeR);
     colors.push(rgb.r * 1.2 * fade, rgb.g * 1.2 * fade, rgb.b * 1.2 * fade);
-    positions.push(cx * outerR, 0.055, cz * outerR);
+    positions.push(cx * outerR, OUTER_RING_Y, cz * outerR);
     colors.push(0, 0, 0);
   }
   for (let k = 0; k < UNDERGLOW_SEGMENTS; k++) {
@@ -43,10 +54,22 @@ export function createUnderglowMesh(color, underglowOpacity) {
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geom.setIndex(indices);
-  const outer = new THREE.Mesh(geom, new THREE.MeshBasicMaterial(Object.assign({
-    vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
-  }, GROUND_DECAL_OFFSET)));
-  outer.renderOrder = 3;
+  const outer = new THREE.Mesh(
+    geom,
+    new THREE.MeshBasicMaterial(
+      Object.assign(
+        {
+          vertexColors: true,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          depthTest: true,
+        },
+        HEADLIGHT_DECAL_POLYGON_OFFSET
+      )
+    )
+  );
+  outer.renderOrder = 9;
   group.add(outer);
 
   return group;

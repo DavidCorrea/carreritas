@@ -3,6 +3,6 @@ export { default as Hud } from './hud.js';
 export { default as ResultsScreen } from './results-screen.js';
 export { default as RecordsPanel } from './records-panel.js';
 export { default as LeaderboardPanel } from './leaderboard-panel.js';
-export { default as AuthPanel } from './auth-panel.js';
 export { default as SettingsPanel } from './settings-panel.js';
 export { default as ResultsPresenter } from './results-presenter.js';
+export { default as ChallengeQualifyScreen } from './challenge-qualify-screen.js';

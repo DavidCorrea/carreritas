@@ -1,16 +1,3 @@
-CREATE TABLE IF NOT EXISTS users (
-  id         SERIAL PRIMARY KEY,
-  username   TEXT UNIQUE NOT NULL,
-  password   TEXT NOT NULL,
-  country    TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS car_settings (
-  user_id  INTEGER PRIMARY KEY REFERENCES users(id),
-  settings JSONB NOT NULL
-);
-
 -- One row per submitted time on a single track (official challenge flows).
 -- Top-10 trimming is enforced in application logic. series_run_id links stages of one series run.
 CREATE SEQUENCE IF NOT EXISTS series_run_id_seq;

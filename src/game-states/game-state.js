@@ -126,8 +126,14 @@ export class RacingState extends GameState {
     const input = context.input ? context.input.getInput(context.menu.isTrackCodeFocused()) : { accel: 0, steer: 0 };
     context.player.updatePhysics(dt, input.accel, input.steer);
 
-    context.player.wallCollision(context.track.inner);
-    context.player.wallCollision(context.track.outer);
+    if (!context.player.isPoseFinite()) {
+      context.player.resetToGrid(context.track, context.direction);
+    } else {
+      context.player.trackCorridorCollision(context.track);
+      if (!context.player.isPoseFinite()) {
+        context.player.resetToGrid(context.track, context.direction);
+      }
+    }
     context.player.syncMeshTransform();
 
     context.player.updateLapTracking(

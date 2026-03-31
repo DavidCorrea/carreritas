@@ -1,5 +1,5 @@
 const { getDb } = require('./_db');
-const { verifyToken, sendJson } = require('./_auth');
+const { sendJson } = require('./_respond');
 const { seriesStagesForChallengeKey } = require('./_challenge-seed');
 
 /**
@@ -89,34 +89,7 @@ module.exports = async function (req, res) {
       };
     });
 
-    const result = { entries, total_count: allTotals.length };
-
-    const user = verifyToken(req);
-    if (user && allTotals.length > 0) {
-      const inTop = top.some(function (r) { return r.display_name === user.username; });
-      if (!inTop) {
-        let rank = null;
-        let timeMs = null;
-        for (let i = 0; i < allTotals.length; i++) {
-          if (allTotals[i].display_name === user.username) {
-            rank = i + 1;
-            timeMs = allTotals[i].time_ms;
-            break;
-          }
-        }
-        if (rank != null) {
-          result.user_entry = {
-            username: user.username,
-            display_name: user.username,
-            country: null,
-            time_ms: timeMs,
-            rank
-          };
-        }
-      }
-    }
-
-    sendJson(res, 200, result);
+    sendJson(res, 200, { entries, total_count: allTotals.length });
     return;
   }
 

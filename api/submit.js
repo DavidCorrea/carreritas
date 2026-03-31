@@ -1,5 +1,5 @@
 const { getDb } = require('./_db');
-const { sendJson } = require('./_auth');
+const { sendJson } = require('./_respond');
 const { sanitizeDisplayName, trimSingleTrackBoard, applyChampionGhost } = require('./_leaderboardDb');
 const { seriesStagesForChallengeKey } = require('./_challenge-seed');
 

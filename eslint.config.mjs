@@ -51,6 +51,20 @@ export default [
     },
   },
   {
+    files: ['tests/**/*.mjs', 'scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2025,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-unused-vars': unusedVarRule,
+      'no-var': 'error',
+    },
+  },
+  {
     files: ['vite.config.js'],
     languageOptions: {
       ecmaVersion: 2025,

@@ -22,6 +22,15 @@ export function disposeMesh(mesh) {
   if (m && !m._shared && !m._sharedCarPalette) m.dispose();
 }
 
+function disposeLineLike(line) {
+  if (line.geometry && !line.geometry._shared) line.geometry.dispose();
+  if (!line.material) return;
+  const m = line.material;
+  if (m._shared) return;
+  if (Array.isArray(m)) m.forEach((mat) => mat.dispose());
+  else m.dispose();
+}
+
 /** Collect shared palette materials once — multiple meshes may reference the same material. */
 export function disposeGroup(group) {
   const sharedPalette = new Set();
@@ -32,6 +41,7 @@ export function disposeGroup(group) {
   });
   group.traverse(function (child) {
     if (child.isMesh) disposeMesh(child);
+    else if (child.isLine || child.isLineSegments || child.isLineLoop) disposeLineLike(child);
   });
   sharedPalette.forEach(function (m) {
     m.dispose();

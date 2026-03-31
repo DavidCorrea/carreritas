@@ -1,8 +1,12 @@
 import { CAR_RADIUS, CAMERA_HEIGHT } from './intrinsic-constants.js';
 import { TopDownMode, RotatedMode, ChaseMode, FirstPersonMode, IsometricMode } from './camera-modes/index.js';
 import { SolidPattern, RingPattern, HalfPattern, StripePattern, GradientPattern, RadialPattern, SpiralPattern, DotsPattern, BullseyePattern } from './car-patterns/index.js';
-import countriesList from './countries-data.json' with { type: 'json' };
-
+import {
+  clipperScale,
+  clipperCenterlineMultiplier,
+  clipperMaxCenterlinePoints,
+  clipperArcToleranceFactor,
+} from './track-clipper-config.js';
 const MENU_PREVIEW_FPS = 60;
 
 const Constants = {
@@ -10,9 +14,12 @@ const Constants = {
     maxSpeed: 280,
     acceleration: 200,
     brakeForce: 320,
-    steerSpeed: 2.8,
-    friction: 0.985,
-    grip: 3.5
+    /** Slightly slower steering response — line choice matters more. */
+    steerSpeed: 2.6,
+    /** A bit more drag — harder to carry speed through mistakes. */
+    friction: 0.982,
+    /** Less lateral damping — easier to scrub speed or slide wide in fast corners. */
+    grip: 2.75
   },
 
   car: {
@@ -31,9 +38,40 @@ const Constants = {
   },
 
   track: {
-    width: 55,
-    /** Spine samples: lower = less mesh/collision work; QA tight bends if reduced. */
-    samples: 320,
+    /** Narrower driving corridor than the original 48 — less room at the edges. */
+    width: 40,
+    /** Samples along closed spline — road mesh, spine, collision (must stay aligned). */
+    samples: 1200,
+    /**
+     * Wall LineLoops use `samples * this` divisions — shorter chords, fewer sharp corners between samples.
+     */
+    wallLineSampleMultiplier: 8,
+    /**
+     * Stricter than `curvatureOffsetSafety`: used **only** for wall LineLoop geometry so inner offset stays
+     * simple (no bowties). Road mesh / collision keep `curvatureOffsetSafety` — kerb can sit slightly inside
+     * the asphalt on the tightest bends.
+     */
+    wallLineCurvatureSafety: 0.58,
+    /**
+     * Parallel offset must stay inside local radius of curvature or the inner offset self-crosses (loops/spikes).
+     * d = min(halfWidth, R * this); R uses several conservative estimates (see track.js).
+     */
+    curvatureOffsetSafety: 0.83,
+    clipperScale,
+    clipperCenterlineMultiplier,
+    clipperMaxCenterlinePoints,
+    clipperArcToleranceFactor,
+
+    /** Kerb cap extends this far from the road edge, radially from track centroid. */
+    /** Slab depth: road edge → outer face (reads as a thin wall in plan). */
+    kerbExtrudeWidth: 0.7,
+    /** Bottom of the wall (just above asphalt; see `track.js` ROAD_SURFACE_Y). */
+    kerbBaseY: 0.034,
+    /** Top of the track-edge wall (span was reduced 40% from the prior tall wall). */
+    kerbCapY: 1.872,
+
+    /** Extra margin beyond car radius for corridor collision — tighter than 1.2 so edge corrections bite sooner. */
+    corridorShell: 0.85,
     recordInterval: 0.1
   },
 
@@ -89,7 +127,6 @@ const Constants = {
   storage: {
     prefix: 'haxrace_ghost_',
     settingsKey: 'carreritas_settings',
-    authKey: 'carreritas_auth',
     arcadeNameKey: 'carreritas_arcade_name'
   },
 
@@ -103,9 +140,9 @@ const Constants = {
   },
 
   /**
-   * When true, challenge leaderboard API responses are replaced with mock data
-   * (`fake-leaderboard.js`). Default: on in Vite dev, off in production. Override with
-   * `VITE_FAKE_CHALLENGE_LEADERBOARD=true` / `=false`.
+   * When true, challenge leaderboard is not fetched from the API (empty TOP 10 in dev).
+   * Post-race name prompt still runs; submit is skipped. Default: on in Vite dev, off in production.
+   * Override with `VITE_FAKE_CHALLENGE_LEADERBOARD=true` / `=false`.
    */
   fakeChallengeLeaderboards: (() => {
     if (typeof import.meta === 'undefined') return false;
@@ -113,10 +150,7 @@ const Constants = {
     if (v === 'false') return false;
     if (v === 'true') return true;
     return import.meta.env.DEV === true;
-  })(),
-
-  /** `[ISO 3166-1 alpha-2, English name][]` sorted by name — registration country `<select>`. */
-  countries: countriesList
+  })()
 };
 
 // Set default pattern after patterns array is created

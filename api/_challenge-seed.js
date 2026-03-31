@@ -3,6 +3,9 @@
  * Keys: dr:|ds:|wr:|ws: + YYYY-MM-DD (daily) or week Monday (weekly).
  */
 
+/** Keep in sync with `TRACK_CODE_LENGTH` in src/utils/track-descriptor.js */
+const TRACK_CODE_LENGTH = 36;
+
 function mulberry32(seed) {
   return function () {
     seed |= 0; seed = seed + 0x6D2B79F5 | 0;
@@ -23,7 +26,7 @@ function hashString(str) {
 
 function seededCode(rng) {
   let out = '';
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < TRACK_CODE_LENGTH; i++) {
     out += String.fromCharCode(33 + Math.floor(rng() * 94));
   }
   return out;

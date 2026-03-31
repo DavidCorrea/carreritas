@@ -2,20 +2,20 @@ import { strings } from '../strings.js';
 
 export default class SettingsPanel {
   constructor() {
-    this._settingsEl = document.getElementById('settings');
-    this._settingsBtn = document.getElementById('settings-btn');
-    this._settingsBackEl = document.getElementById('settings-back');
-    this._colorPrimaryEl = document.getElementById('color-primary');
-    this._colorSecondaryEl = document.getElementById('color-secondary');
-    this._colorHeadlightsEl = document.getElementById('color-headlights');
-    this._headlightShapeEl = document.getElementById('headlight-shape');
-    this._colorUnderglowEl = document.getElementById('color-underglow');
-    this._underglowOpacityEl = document.getElementById('underglow-opacity');
-    this._underglowOpacityLabel = document.getElementById('underglow-opacity-label');
-    this._patternOptionsEl = document.getElementById('pattern-options');
-    this._previewModeToggle = document.getElementById('preview-mode-toggle');
-    this._previewCameraToggle = document.getElementById('preview-camera-toggle');
-    this._previewDriveToggle = document.getElementById('preview-drive-toggle');
+    this._settingsEl = document.querySelector('.car-settings');
+    this._settingsBtn = document.querySelector('.menu-overlay__settings-btn');
+    this._settingsBackEl = document.querySelector('.car-settings__back');
+    this._colorPrimaryEl = document.querySelector('.car-settings__color--primary');
+    this._colorSecondaryEl = document.querySelector('.car-settings__color--secondary');
+    this._colorHeadlightsEl = document.querySelector('.car-settings__color--headlights');
+    this._headlightShapeEl = document.querySelector('.car-settings__range--headlight-shape');
+    this._colorUnderglowEl = document.querySelector('.car-settings__color--underglow');
+    this._underglowOpacityEl = document.querySelector('.car-settings__range--underglow-opacity');
+    this._underglowOpacityLabel = document.querySelector('.car-settings__label--underglow-opacity');
+    this._patternOptionsEl = document.querySelector('.car-settings__pattern-list');
+    this._previewModeToggle = document.querySelector('.car-settings__preview-mode-toggle');
+    this._previewCameraToggle = document.querySelector('.car-settings__preview-camera-toggle');
+    this._previewDriveToggle = document.querySelector('.car-settings__preview-drive-toggle');
     this._patternClickHandler = null;
   }
 
@@ -29,7 +29,7 @@ export default class SettingsPanel {
   hide() { this._settingsEl.classList.add('hidden'); }
   isOpen() { return !this._settingsEl.classList.contains('hidden'); }
 
-  showBackButton(visible) { this._settingsBackEl.style.display = visible ? '' : 'none'; }
+  showBackButton(visible) { this._settingsBackEl.style.display = visible ? 'block' : 'none'; }
 
   setCarSettings(settings) {
     this._colorPrimaryEl.value = settings.primaryColor;
@@ -47,7 +47,7 @@ export default class SettingsPanel {
       const p = patterns[i];
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'pattern-btn' + (p === selected || (p.name && selected && p.name === selected.name) ? ' selected' : '');
+      btn.className = 'car-settings__pattern-btn' + (p === selected || (p.name && selected && p.name === selected.name) ? ' selected' : '');
       btn.dataset.pattern = p.name;
       const cvs = document.createElement('canvas');
       cvs.width = 64;
@@ -59,7 +59,7 @@ export default class SettingsPanel {
   }
 
   updatePatternPreviews(drawFn, primaryColor, secondaryColor, patterns) {
-    const buttons = this._patternOptionsEl.querySelectorAll('.pattern-btn');
+    const buttons = this._patternOptionsEl.querySelectorAll('.car-settings__pattern-btn');
     for (let i = 0; i < buttons.length; i++) {
       const cvs = buttons[i].querySelector('canvas');
       const patternName = buttons[i].dataset.pattern;
@@ -74,14 +74,14 @@ export default class SettingsPanel {
     this._previewCameraToggle.innerHTML = '';
     const showcaseBtn = document.createElement('button');
     showcaseBtn.type = 'button';
-    showcaseBtn.className = 'seg-option' + (showcaseActive ? ' selected' : '');
+    showcaseBtn.className = 'seg__option' + (showcaseActive ? ' selected' : '');
     showcaseBtn.dataset.val = 'showcase';
     showcaseBtn.textContent = strings.settings.showcase;
     this._previewCameraToggle.appendChild(showcaseBtn);
     for (let i = 0; i < modes.length; i++) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'seg-option' + (!showcaseActive && i === currentIndex ? ' selected' : '');
+      btn.className = 'seg__option' + (!showcaseActive && i === currentIndex ? ' selected' : '');
       btn.dataset.val = String(i);
       btn.textContent = strings.camera.labels[modes[i].name] || modes[i].name;
       this._previewCameraToggle.appendChild(btn);
@@ -100,7 +100,7 @@ export default class SettingsPanel {
     }
     const self = this;
     this._patternClickHandler = function (e) {
-      const btn = e.target?.closest('.pattern-btn');
+      const btn = e.target?.closest('.car-settings__pattern-btn');
       if (!btn) return;
       const sel = self._patternOptionsEl.querySelector('.selected');
       if (sel) sel.classList.remove('selected');
@@ -155,7 +155,7 @@ export default class SettingsPanel {
   onPreviewModeToggle(handler) {
     const self = this;
     this._previewModeToggle.addEventListener('click', function (e) {
-      const btn = e.target?.closest('.seg-option');
+      const btn = e.target?.closest('.seg__option');
       if (!btn || btn.classList.contains('selected')) return;
       self._previewModeToggle.querySelector('.selected').classList.remove('selected');
       btn.classList.add('selected');
@@ -166,7 +166,7 @@ export default class SettingsPanel {
   onPreviewCameraToggle(handler) {
     const self = this;
     this._previewCameraToggle.addEventListener('click', function (e) {
-      const btn = e.target?.closest('.seg-option');
+      const btn = e.target?.closest('.seg__option');
       if (!btn || btn.classList.contains('selected')) return;
       self._previewCameraToggle.querySelector('.selected').classList.remove('selected');
       btn.classList.add('selected');
@@ -177,7 +177,7 @@ export default class SettingsPanel {
   onPreviewDriveToggle(handler) {
     const self = this;
     this._previewDriveToggle.addEventListener('click', function (e) {
-      const btn = e.target?.closest('.seg-option');
+      const btn = e.target?.closest('.seg__option');
       if (!btn || btn.classList.contains('selected')) return;
       self._previewDriveToggle.querySelector('.selected').classList.remove('selected');
       btn.classList.add('selected');

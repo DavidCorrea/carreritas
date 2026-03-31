@@ -1,6 +1,15 @@
 import Constants from '../constants.js';
 import { strings } from '../strings.js';
-import { formatTime, pickRandom, formatDescriptor, challengeLabel } from '../utils/index.js';
+import {
+  formatTime, pickRandom, formatDescriptor, challengeLabel, encodeTrackShareToken
+} from '../utils/index.js';
+
+function sharePageBase() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin + '/';
+  }
+  return Constants.share.base;
+}
 
 /** Fills the results overlay and builds share URL/text after a run. */
 export default class ResultsPresenter {
@@ -9,17 +18,21 @@ export default class ResultsPresenter {
   }
 
   shareURL(game) {
+    const base = sharePageBase();
     if (game.seriesMode) {
-      const descs = [];
       const results = game.currentRun.getSeriesResultsSnapshot();
+      const tokens = [];
       for (let i = 0; i < results.length; i++) {
         const sr = results[i];
-        descs.push(formatDescriptor(sr.code, sr.direction, sr.mode, game.totalLaps));
+        tokens.push(encodeTrackShareToken(sr.code, sr.direction, sr.mode, game.totalLaps));
       }
-      return Constants.share.base + '?s=' + encodeURIComponent(descs.join(','));
+      return base + '?s=' + tokens.join(',');
     }
-    return Constants.share.base + '?t=' + encodeURIComponent(
-      formatDescriptor(game.currentTrackCode, game.direction, game.mode, game.totalLaps)
+    return base + '?r=' + encodeTrackShareToken(
+      game.currentTrackCode,
+      game.direction,
+      game.mode,
+      game.totalLaps
     );
   }
 

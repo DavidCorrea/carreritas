@@ -13,18 +13,6 @@ export const strings = {
       speedPlaceholder: '0 km/h',
       controlsHint: 'W/\u2191 S/\u2193 A/\u2190 D/\u2192 \u00a0 SPACE Restart \u00a0 C Camera'
     },
-    auth: {
-      titleLogin: 'LOGIN',
-      titleRegister: 'REGISTER',
-      submitLogin: 'LOGIN',
-      submitRegister: 'REGISTER',
-      usernamePlaceholder: 'Username',
-      passwordPlaceholder: 'Password',
-      toggleToRegister: 'No account? <a id="auth-switch">Register</a>',
-      toggleToLogin: 'Have an account? <a id="auth-switch">Login</a>',
-      closeDesktop: 'ESC Skip',
-      closeMobile: 'Skip'
-    },
     overlay: {
       title: 'CARRERITAS',
       subtitles: [
@@ -47,7 +35,7 @@ export const strings = {
       stages: 'STAGES',
       rngAll: 'RNG ALL',
       laps: 'LAPS',
-      lapsPerStage: 'LAPS PER STAGE',
+      lapsPerStage: 'Stage Laps',
       eventStartPrompt: 'Press ENTER to start',
       challengeStartPrompt: 'Press ENTER to start',
       challengeModes: {
@@ -72,6 +60,15 @@ export const strings = {
       replayHintDesktop: 'Press ESC to return',
       replayHintMobile: 'Tap to return',
       /** Desktop keyboard hint after race (also used for series complete). */
+      promptRetryMenu: 'ENTER Retry \u00b7 ESC Menu'
+    },
+    challengeQualify: {
+      nameLabel: 'NAME',
+      submitBtn: 'SUBMIT',
+      replayBtn: 'REPLAY',
+      shareBtn: 'SHARE',
+      replayBtnTitle: 'Watch replay',
+      shareTitle: 'Share results',
       promptRetryMenu: 'ENTER Retry \u00b7 ESC Menu'
     },
     leaderboard: {
@@ -127,16 +124,6 @@ export const strings = {
       'Zero entries \u2014 make history',
       'Blank slate \u2014 someone\u2019s gotta go first',
       'The board is cold \u2014 warm it up'
-    ],
-    notLoggedIn: [
-      '{n} on the board \u2014 log in to compete',
-      '{n} posted so far \u2014 log in to join',
-      '{n} in the mix \u2014 log in and show up',
-      '{n} already in \u2014 log in to challenge them',
-      '{n} on the clock \u2014 log in to post yours',
-      'The board has {n} \u2014 log in and make it {n}+1',
-      '{n} left their mark \u2014 log in to leave yours',
-      '{n} threw down \u2014 log in and answer'
     ],
     notParticipated: [
       '{n} in and counting \u2014 jump in',
@@ -227,13 +214,6 @@ export const strings = {
     ]
   },
 
-  auth: {
-    countryPlaceholder: 'Select country',
-    fillFields: 'Fill in both fields',
-    selectCountry: 'Select a country',
-    connectionError: 'Connection error'
-  },
-
   hud: {
     lap: (current, total) => 'LAP ' + current + ' / ' + total,
     best: (timeStr) => 'BEST ' + timeStr,
@@ -272,7 +252,18 @@ export const strings = {
     shareLapLine: (n, t, star) => 'L' + n + '  ' + t + star,
     starFastest: ' \u2605',
     betterLuckNextTime: 'Leaderboard: better luck next time.',
-    arcadeNamePrompt: 'Enter name for the leaderboard'
+    /** Random headline on the pre-results qualify screen (`pickRandom`). */
+    challengeQualifyHeadlines: [
+      'TOP 10!',
+      'YOU QUALIFIED!',
+      'BOARD MATERIAL!',
+      'ELITE RUN!',
+      'THAT TIME STICKS!',
+      'SPOT SECURED!',
+      'PODIUM PACE!'
+    ],
+    /** `{rank}` = provisional 1-based rank vs current board. */
+    challengeQualifySubline: 'Provisional rank #{rank} \u2014 add your name to lock it in.'
   },
 
   records: {
@@ -299,7 +290,7 @@ export const strings = {
     tapStart: 'Tap to start',
     back: 'Back',
     /** Shown instead of keyboard lines in the main menu on touch devices. */
-    menuOverlayHint: 'Left: steer · Right: gas / brake · Buttons: reset, camera, menu'
+    menuOverlayHint: 'Left: steer · Right: gas / brake\nButtons: reset, camera, menu'
   },
 
   /** Countdown parts for `formatCountdown` in `utils/challenge-seed.js` (challenge reset timer). */
@@ -325,18 +316,18 @@ export function formatPlaceholders(template, vars) {
   return s;
 }
 
-function _setText(id, text) {
-  const el = document.getElementById(id);
+function _setText(selector, text) {
+  const el = document.querySelector(selector);
   if (el) el.textContent = text;
 }
 
-function _setHtml(id, html) {
-  const el = document.getElementById(id);
+function _setHtml(selector, html) {
+  const el = document.querySelector(selector);
   if (el) el.innerHTML = html;
 }
 
-function _setAttr(id, name, value) {
-  const el = document.getElementById(id);
+function _setAttr(selector, name, value) {
+  const el = document.querySelector(selector);
   if (el) el.setAttribute(name, value);
 }
 
@@ -345,38 +336,31 @@ export function applyStaticDocumentCopy() {
   const d = strings.document;
   document.title = d.pageTitle;
 
-  _setText('lap-display', d.hud.lapDisplayPlaceholder);
-  _setText('best-display', d.hud.bestPlaceholder);
-  _setText('time-display', d.hud.timePlaceholder);
-  _setText('speed-display', d.hud.speedPlaceholder);
-  _setText('controls-hint', d.hud.controlsHint);
+  _setText('.race-hud__lap', d.hud.lapDisplayPlaceholder);
+  _setText('.race-hud__best', d.hud.bestPlaceholder);
+  _setText('.race-hud__time', d.hud.timePlaceholder);
+  _setText('.race-hud__speed', d.hud.speedPlaceholder);
+  _setText('.race-hud__controls-hint', d.hud.controlsHint);
 
-  _setText('records-btn', d.overlay.bestRuns);
-  _setText('settings-btn', d.overlay.carSettings);
+  _setText('.menu-overlay__records-btn', d.overlay.bestRuns);
+  _setText('.menu-overlay__settings-btn', d.overlay.carSettings);
 
-  _setText('auth-title', d.auth.titleLogin);
-  _setAttr('auth-username', 'placeholder', d.auth.usernamePlaceholder);
-  _setAttr('auth-password', 'placeholder', d.auth.passwordPlaceholder);
-  _setText('auth-submit-btn', d.auth.submitLogin);
-  _setHtml('auth-toggle', d.auth.toggleToRegister);
-  _setText('auth-close', d.auth.closeDesktop);
-
-  const h1 = document.querySelector('#overlay h1');
+  const h1 = document.querySelector('.menu-overlay h1');
   if (h1) h1.textContent = d.overlay.title;
-  const subs = document.querySelectorAll('#overlay .menu-hints .subtitle');
+  const subs = document.querySelectorAll('.menu-overlay .menu-hints .subtitle');
   for (let i = 0; i < subs.length && i < d.overlay.subtitles.length; i++) {
     subs[i].innerHTML = d.overlay.subtitles[i];
   }
 
-  const tabBtns = document.querySelectorAll('#menu-tab-toggle .seg-option');
+  const tabBtns = document.querySelectorAll('.menu-overlay__tab-toggle .seg__option');
   if (tabBtns[0]) tabBtns[0].textContent = d.overlay.tabLeaderboard;
   if (tabBtns[1]) tabBtns[1].textContent = d.overlay.tabCasual;
 
-  const raceBtns = document.querySelectorAll('#race-type-toggle .seg-option');
+  const raceBtns = document.querySelectorAll('.menu-overlay__race-type-toggle .seg__option');
   if (raceBtns[0]) raceBtns[0].textContent = d.overlay.raceTypeSingle;
   if (raceBtns[1]) raceBtns[1].textContent = d.overlay.raceTypeSeries;
 
-  const trackLabels = document.querySelectorAll('#event-tab .track-label');
+  const trackLabels = document.querySelectorAll('.menu-overlay__event-tab .field-label');
   for (let i = 0; i < trackLabels.length; i++) {
     const el = trackLabels[i];
     const t = el.textContent.trim();
@@ -384,63 +368,71 @@ export function applyStaticDocumentCopy() {
     else if (t === 'DIRECTION') el.textContent = d.overlay.direction;
     else if (t === 'MODE') el.textContent = d.overlay.mode;
     else if (t === 'STAGES') el.textContent = d.overlay.stages;
-    else if (t === 'LAPS' || t === 'LAPS PER STAGE') el.textContent = d.overlay.laps;
+    else if (t === 'LAPS PER STAGE' || t === 'Stage Laps') el.textContent = d.overlay.lapsPerStage;
+    else if (t === 'LAPS') el.textContent = d.overlay.laps;
   }
 
-  _setText('random-btn', d.overlay.randomBtn);
-  _setText('rng-all-btn', d.overlay.rngAll);
+  _setText('.menu-overlay__random-btn', d.overlay.randomBtn);
+  _setText('.menu-overlay__rng-all-btn', d.overlay.rngAll);
 
-  const dirSeg = document.querySelectorAll('#dir-toggle .seg-option');
+  const dirSeg = document.querySelectorAll('.menu-overlay__dir-toggle .seg__option');
   if (dirSeg[0]) dirSeg[0].textContent = d.overlay.fwd;
   if (dirSeg[1]) dirSeg[1].textContent = d.overlay.rev;
 
-  const modeSeg = document.querySelectorAll('#mode-toggle .seg-option');
+  const modeSeg = document.querySelectorAll('.menu-overlay__mode-toggle .seg__option');
   if (modeSeg[0]) modeSeg[0].textContent = d.overlay.day;
   if (modeSeg[1]) modeSeg[1].textContent = d.overlay.night;
 
-  _setText('laps-label', d.overlay.laps);
-  _setText('race-type-value', d.overlay.raceTypeSingle);
-  _setText('dir-value', d.overlay.fwd);
-  _setText('mode-value', d.overlay.day);
-  _setText('event-start-prompt', d.overlay.eventStartPrompt);
-  _setText('challenge-start-prompt', d.overlay.challengeStartPrompt);
+  _setText('.menu-overlay__laps-label', d.overlay.laps);
+  _setText('.menu-overlay__race-type-value', d.overlay.raceTypeSingle);
+  _setText('.menu-overlay__dir-value', d.overlay.fwd);
+  _setText('.menu-overlay__mode-value', d.overlay.day);
+  _setText('.menu-overlay__start-prompt--event', d.overlay.eventStartPrompt);
+  _setText('.menu-overlay__start-prompt--challenge', d.overlay.challengeStartPrompt);
 
-  const chBtns = document.querySelectorAll('#challenge-mode-toggle .seg-option');
+  const chBtns = document.querySelectorAll('.menu-overlay__challenge-mode-toggle .seg__option');
   const cm = d.overlay.challengeModes;
   const order = ['daily-race', 'daily-series', 'weekly-race', 'weekly-series'];
   for (let i = 0; i < chBtns.length && i < order.length; i++) {
     chBtns[i].textContent = cm[order[i]];
   }
 
-  _setText('leaderboard-menu-btn', d.overlay.top10MenuBtn);
+  _setText('.menu-overlay__leaderboard-btn', d.overlay.top10MenuBtn);
 
-  const gh = document.querySelector('#overlay .github-link');
+  const gh = document.querySelector('.menu-overlay .github-link');
   if (gh) gh.textContent = d.overlay.github;
 
-  const resH2 = document.querySelector('#results h2');
+  const resH2 = document.querySelector('.race-results h2');
   if (resH2) resH2.textContent = d.results.titleDefault;
-  _setAttr('copy-track-btn', 'title', d.results.copyTrackTitle);
-  _setAttr('share-btn', 'title', d.results.shareTitle);
-  _setText('share-btn', d.results.shareBtn);
-  _setText('leaderboard-btn', d.results.leaderboardBtn);
-  _setAttr('replay-btn', 'title', d.results.replayBtnTitle);
-  _setText('replay-btn', d.results.replayBtn);
-  _setText('results-prompt', d.results.promptRetryMenu);
+  _setAttr('.race-results__copy-track', 'title', d.results.copyTrackTitle);
+  _setAttr('.race-results__share', 'title', d.results.shareTitle);
+  _setText('.race-results__share', d.results.shareBtn);
+  _setText('.race-results__leaderboard', d.results.leaderboardBtn);
+  _setAttr('.race-results__replay', 'title', d.results.replayBtnTitle);
+  _setText('.race-results__replay', d.results.replayBtn);
+  _setText('.race-results__prompt', d.results.promptRetryMenu);
 
-  const lbH2 = document.querySelector('#leaderboard h2');
+  _setText('.challenge-qualify__label-text', d.challengeQualify.nameLabel);
+  _setText('.challenge-qualify__submit', d.challengeQualify.submitBtn);
+  _setText('.challenge-qualify__replay', d.challengeQualify.replayBtn);
+  _setText('.challenge-qualify__share', d.challengeQualify.shareBtn);
+  _setAttr('.challenge-qualify__replay', 'title', d.challengeQualify.replayBtnTitle);
+  _setAttr('.challenge-qualify__share', 'title', d.challengeQualify.shareTitle);
+  _setText('.challenge-qualify__prompt', d.challengeQualify.promptRetryMenu);
+
+  const lbH2 = document.querySelector('.race-leaderboard h2');
   if (lbH2) lbH2.textContent = d.leaderboard.title;
-  _setText('leaderboard-back', d.leaderboard.back);
+  _setText('.race-leaderboard__back', d.leaderboard.back);
 
-  const recH2 = document.querySelector('#records h2');
+  const recH2 = document.querySelector('.race-records h2');
   if (recH2) recH2.textContent = d.records.title;
-  _setText('records-back', d.records.back);
+  _setText('.race-records__back', d.records.back);
 
-  const setLabel = document.querySelectorAll('#settings .track-label');
+  const setLabel = document.querySelectorAll('.car-settings .field-label');
   for (let i = 0; i < setLabel.length; i++) {
     const el = setLabel[i];
-    const id = el.id;
-    if (id === 'headlight-shape-label') el.textContent = d.settings.shape;
-    else if (id === 'underglow-opacity-label') { /* percentage updated live */ }
+    if (el.classList.contains('car-settings__label--headlight-shape')) el.textContent = d.settings.shape;
+    else if (el.classList.contains('car-settings__label--underglow-opacity')) { /* percentage updated live */ }
     else {
       const t = el.textContent.trim();
       if (t === 'PATTERN') el.textContent = d.settings.pattern;
@@ -451,15 +443,15 @@ export function applyStaticDocumentCopy() {
     }
   }
 
-  const prevMode = document.querySelectorAll('#preview-mode-toggle .seg-option');
+  const prevMode = document.querySelectorAll('.car-settings__preview-mode-toggle .seg__option');
   if (prevMode[0]) prevMode[0].textContent = d.settings.previewDay;
   if (prevMode[1]) prevMode[1].textContent = d.settings.previewNight;
 
-  const prevDrive = document.querySelectorAll('#preview-drive-toggle .seg-option');
+  const prevDrive = document.querySelectorAll('.car-settings__preview-drive-toggle .seg__option');
   if (prevDrive[0]) prevDrive[0].textContent = d.settings.previewIdle;
   if (prevDrive[1]) prevDrive[1].textContent = d.settings.previewRunning;
 
-  _setText('settings-back', d.settings.back);
+  _setText('.car-settings__back', d.settings.back);
 
   const tz = document.querySelectorAll('.touch-zone-label');
   if (tz[0]) tz[0].textContent = d.touch.steer;
